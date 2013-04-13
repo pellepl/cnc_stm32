@@ -1,0 +1,9 @@
+reset init
+halt   
+flash info 0
+flash probe 0
+flash protect 0 0 255 off
+flash erase_sector 0 0 255
+flash write_bank 0 BUILDFILE 0
+reset
+exit

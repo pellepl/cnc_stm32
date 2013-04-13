@@ -1,0 +1,862 @@
+#include "os.h"
+#include "miniutils.h"
+#include "list.h"
+#include "linker_symaccess.h"
+
+#define OS_THREAD_FLAG_ALIVE        (1<<0)
+#define OS_THREAD_FLAG_SLEEP        (1<<1)
+#define OS_SVC_YIELD                (0x00010000)
+#define OS_FOREVER                  ((time)-1)
+#define OS_STACK_START_MARKER       (0xf00dcafe)
+#define OS_STACK_END_MARKER         (0xfadebeef)
+
+#define OS_ELEMENT(obj) &((obj)->this.e)
+#define OS_TYPE(obj) ((obj)->type)
+#define OS_OBJ(ele) ((os_object *)((char *)(ele) + ((char *)&((os_object *)0)->e - (char *)0 )))
+#define OS_THREAD(ele) ((os_thread *)((char *)(ele) + ((char *)&((os_thread *)0)->this.e - (char *)0 )))
+#define OS_COND(ele) ((os_cond *)((char *)(ele) + ((char *)&((os_cond *)0)->this.e - (char *)0 )))
+
+#define _STACK_USAGE_MARK (0xea)
+#define _STACK_USAGE_MARK_32 ((_STACK_USAGE_MARK << 24) | (_STACK_USAGE_MARK << 16) | (_STACK_USAGE_MARK << 8) | _STACK_USAGE_MARK)
+
+typedef struct {
+  u32_t r0;
+  u32_t r1;
+  u32_t r2;
+  u32_t r3;
+  u32_t r12;
+  u32_t lr;
+  u32_t pc;
+  u32_t psr;
+} cortex_frame;
+
+typedef struct {
+  u32_t r4;
+  u32_t r5;
+  u32_t r6;
+  u32_t r7;
+  u32_t r8;
+  u32_t r9;
+  u32_t r10;
+  u32_t r11;
+} thread_frame;
+
+static struct os {
+  // pointer to current thread
+  os_thread *current_thread;
+  // flags of current thread
+  u32_t current_flags;
+  // msp on first context switch
+  void *main_msp;
+  // thread running queue
+  list_t q_running;
+  // thread sleeping queue
+  list_t q_sleep;
+  time first_awake;
+  bool preemption;
+#if OS_DBG_MON
+  u8_t thread_peer_ix;
+  os_thread *thread_peers[OS_THREAD_PEERS];
+  u8_t mutex_peer_ix;
+  os_mutex *mutex_peers[OS_MUTEX_PEERS];
+  u8_t cond_peer_ix;
+  os_cond *cond_peers[OS_COND_PEERS];
+#endif
+} os;
+
+static volatile u32_t g_id = 0;
+static volatile u8_t g_crit_entry = 0;
+
+u32_t __os_ctx_switch(void *sp);
+static void __os_thread_death(void);
+static void __os_disable_preemption(void);
+static void __os_enable_preemption(void);
+
+
+//------------ irq calls -------------
+
+// called from SVC_Handler in svc_handler.s
+void __os_svc_handler(u32_t *args) {
+  u32_t svc_nbr;
+  u32_t arg0;
+  u32_t arg1;
+  u32_t arg2;
+  u32_t arg3;
+
+  svc_nbr = ((u8_t *)args[6])[-2]; // get stacked_pc - 2
+  arg0 = args[0];
+  arg1 = args[1];
+  arg2 = args[2];
+  arg3 = args[3];
+
+  //print("SVC call #%i %08x %08x %08x %08x\n", svc_nbr, arg0, arg1, arg2, arg3);
+
+  if (svc_nbr == 1) {
+// TODO
+//    if (arg0 == OS_SVC_YIELD) {
+      SCB->ICSR |= SCB_ICSR_PENDSVSET;
+      return;
+//    }
+  }
+  ASSERT(FALSE);
+}
+
+// Called from SysTick_Handler in stm32f103x_it.c
+void __os_systick(void) {
+  // assert pendsv
+  SCB->ICSR |= SCB_ICSR_PENDSVSET;
+}
+
+// Called from PendSV_Handler in stm32f103x_it.c
+// Avoid nesting: cannot be a nested interrupt, as it is pendsv
+// with lowest prio.
+// Not in c, we can never know what compiler does with registers
+// and stack after restoring context upon function exit.
+__attribute__((naked)) void __os_pendsv(void)  {
+  asm volatile (
+      // if os.current_flags != 0, then store context
+      "ldr     r2, __os\n"
+      "ldr     r1, [r2, %0]\n"    // get os.current_flags
+      "cbz     r1, __no_leave_context\n"
+      // ..store context
+      "tst     r1, #(1<<2)\n"     // is OS_THREAD_FLAG_PRIVILEGED set?
+      "beq     __store_thread_context\n"
+      // ....store main context
+      "push    {r4-r11}\n"
+      "mrs     r0, msp\n"
+      "b       __do_ctx_switch\n"
+      // ....store thread context
+      "__store_thread_context:\n"
+      "mrs     r0, psp\n"
+      "stmdb   r0!, {r4-r11}\n"
+      "msr     psp, r0\n"
+      "b       __do_ctx_switch\n"
+      // ..else store kernel main context
+      "__no_leave_context:\n"
+      "ldr     r1, [r2, %1]\n"    // get os.main_msp
+      "teq     r1, #0\n"          // if zero, first ctx switch ever
+      "ittt    eq\n"
+      "pusheq  {r4-r11}\n"
+      "mrseq   r0, msp\n"
+      "streq   r0, [r2, %1]\n"    // store os.main_msp
+
+      // call __os_ctx_switch
+      "__do_ctx_switch:\n"
+      // takes r0 = current sp
+      // returns r0 = flags of new thread or 0
+      //         r1 = new sp
+      "bl      __os_ctx_switch\n"
+
+      // if got new thread
+      "cbz     r0, __no_enter_context\n"
+      // ..restore context
+      "tst     r0, #(1<<2)\n"     // is OS_THREAD_FLAG_PRIVILEGED set?
+      "beq     __restore_thread_context\n"
+      // ....restore main context
+      "msr     msp, r1\n"
+      "pop     {r4-r11}\n"
+      "mvn     lr, #6\n"          // __MAIN_RETURN, priv thread
+      "bx      lr\n"
+      // ....restore thread context
+      "__restore_thread_context:\n"
+      "ldmfd   r1!, {r4-r11}\n"
+      "msr     psp, r1\n"
+      "mvn     lr, #2\n" // __THREAD_RETURN, norm thread
+      "bx      lr\n"
+      // ..else if no new thread, get ass back to kernel main
+      "__no_enter_context:\n"
+      "ldr     r2, __os\n"
+      "ldr     r1, [r2, %1]\n"  // r1 = os.main_msp
+      "str     r0, [r2, %1]\n"  // os.current_flags = 0
+      "msr     msp, r1\n"       // msp = r1
+      "pop     {r4-r11}\n"
+      "mvn     lr, #6\n" // __MAIN_RETURN, kernel
+      "bx      lr\n"
+      "__os:"
+      ".word   os"
+
+      :
+      : "n"(offsetof(struct os, current_flags)), "n"(offsetof(struct os, main_msp))
+  );
+}
+
+//------- System helpers -------------
+
+u32_t __os_ctx_switch(void *sp) {
+  os_thread *cand = NULL;
+  __CLREX();  // removes the local exclusive access tag for the processor
+
+  __os_enter_critical_kernel();
+  if (os.current_thread != NULL) {
+    // save current psp to current thread
+    if (os.current_thread->flags & OS_THREAD_FLAG_ALIVE) {
+      os.current_thread->sp = sp;
+    }
+#if OS_STACK_CHECK
+    ASSERT(*(u32_t*)(os.current_thread->stack_start - 4) == OS_STACK_START_MARKER);
+    ASSERT(*(u32_t*)(os.current_thread->stack_end) == OS_STACK_END_MARKER);
+#endif
+    cand = OS_THREAD(list_next(OS_ELEMENT(os.current_thread)));
+  }
+
+  if (cand == NULL) {
+    cand = OS_THREAD(list_first(&os.q_running));
+  }
+  __os_exit_critical_kernel();
+
+  if (cand != NULL) {
+    // got a candidate, setup context
+    os.current_flags = cand->flags;
+  } else {
+    // no candidate
+    os.current_flags = 0;
+  }
+  os.current_thread = cand;
+  if (os.current_flags) {
+    asm volatile (
+        "mov    r1, %0\n"
+        :
+        : "r"(cand->sp)
+        : "r1"
+    );
+  }
+  return os.current_flags;
+}
+
+static void __os_sleepers_update(list_t *q, time now) {
+  element_t *e;
+  e = list_first(q);
+  while (e && list_get_order(e) <= now) {
+    // get sleeper element
+    os_type type = OS_TYPE(OS_OBJ(e));
+    __os_enter_critical_kernel();
+    element_t *next_e = list_next(e);
+    __os_exit_critical_kernel();
+
+    switch (type) {
+    case OS_THREAD: {
+      // it was a thread, simply move from sleeping to running
+      os_thread *t = OS_THREAD(e);
+      t->ret_val = TRUE;
+      __os_enter_critical_kernel();
+      list_delete(q, e);
+      list_add(&os.q_running, e);
+      list_set_order(e, OS_FOREVER);
+      t->flags &= ~OS_THREAD_FLAG_SLEEP;
+      __os_exit_critical_kernel();
+    }
+    break;
+
+    case OS_COND: {
+      // it was a conditional, recurse into conditional's sleep queue
+      os_cond *c = OS_COND(e);
+      if (now >= e->sort_order) {
+        __os_sleepers_update(&c->q_sleep, now);
+        __os_enter_critical_kernel();
+        if (list_empty(&c->q_sleep)) {
+          // conds sleep queue got empty, remove from os's sleep queue
+          list_set_order(c, OS_FOREVER);
+          c->has_sleepers = FALSE;
+          list_delete(&os.q_sleep, e);
+        } else {
+          // conds sleep queue not empty, update in os's sleep queue
+          list_set_order(c, list_get_order(list_first(&c->q_sleep)));
+          list_delete(&os.q_sleep, e);
+          list_sort_insert(&os.q_sleep, e);
+        }
+        __os_exit_critical_kernel();
+      }
+    }
+    break;
+    }
+    e = next_e;
+  }
+}
+
+void __os_time_tick(time now) {
+  if (now >= os.first_awake) {
+    __os_sleepers_update(&os.q_sleep, now);
+    if (list_empty(&os.q_sleep)) {
+      os.first_awake = OS_FOREVER;
+    } else {
+      os.first_awake = list_get_order(list_first(&os.q_sleep));
+    }
+  }
+}
+
+__attribute__((noreturn)) static void __os_thread_death(void) {
+  __os_enter_critical_kernel();
+  list_delete(&os.q_running, OS_ELEMENT(os.current_thread));
+  list_move(&os.q_running, &os.current_thread->q_join);
+  os.current_thread->flags = 0;
+  os.current_thread = NULL;
+  __os_exit_critical_kernel();
+  (void)OS_thread_yield();
+  while(1);
+}
+
+// disable systick
+static inline void __os_disable_preemption(void) {
+  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+  os.preemption = FALSE;
+}
+
+// enable systick
+static inline void __os_enable_preemption(void) {
+  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+  os.preemption = TRUE;
+}
+
+static bool OS_enter_critical() {
+  bool pre = os.preemption;
+  __os_disable_preemption();
+  return pre;
+}
+
+static void OS_exit_critical(bool pre) {
+  if (pre) {
+    __os_enable_preemption();
+  }
+}
+
+// enter critical, disable interrupts
+inline void __os_enter_critical_kernel(void) {
+  __disable_irq();
+  g_crit_entry++;
+}
+
+// exit critical, enable interrupts
+inline void __os_exit_critical_kernel(void) {
+  ASSERT(g_crit_entry > 0);
+  g_crit_entry--;
+  if (g_crit_entry == 0) {
+    __enable_irq();
+  }
+}
+
+// reset critical, enable interrupts
+static inline void __os_reset_critical_kernel(void) {
+  g_crit_entry = 0;
+  __enable_irq();
+}
+
+//------- Public functions -----------
+
+u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *arg, void *stack, u32_t stack_size, const char *name) {
+  // align stack pointer
+  if ((u32_t)stack & 0x3) {
+    stack = (void *)((u32_t)stack + (4-((u32_t)stack & 0x3)));
+    stack_size -= (4-((u32_t)stack & 0x3));
+  }
+  stack_size &= ~3;
+
+#if OS_STACK_CHECK
+  *(u32_t *)stack = OS_STACK_START_MARKER;
+  *(u32_t *)(stack + stack_size - 4) = OS_STACK_END_MARKER;
+  stack += 4;
+  stack_size -= 4*2;
+#endif
+
+#if OS_STACK_USAGE_CHECK
+  memset(stack, _STACK_USAGE_MARK, stack_size);
+#endif
+
+  // create startup frame
+  cortex_frame *init_frame = (cortex_frame *)(stack + stack_size - sizeof(cortex_frame));
+  init_frame->r0 = (u32_t)arg;
+  init_frame->r1 = 0;
+  init_frame->r2 = 0;
+  init_frame->r3 = 0;
+  init_frame->r12 = 0;
+  init_frame->pc = (u32_t)func;
+  init_frame->lr = (u32_t)__os_thread_death;
+  init_frame->psr = 0x21000000; // default psr
+
+  t->flags = OS_THREAD_FLAG_ALIVE | flags;
+  t->sp = stack + stack_size - sizeof(cortex_frame) - sizeof(thread_frame);
+  t->stack_start = stack;
+  t->stack_end = (void*)(stack + stack_size);
+  t->func = func;
+
+  t->this.type = OS_THREAD;
+
+  t->id = ++g_id;
+  t->name = name;
+
+  list_init(&t->q_join);
+  list_set_order(OS_ELEMENT(t), OS_FOREVER);
+
+  __os_enter_critical_kernel();
+  list_add(&os.q_running, OS_ELEMENT(t));
+#if OS_DBG_MON & OS_THREAD_PEERS > 0
+  os.thread_peers[os.thread_peer_ix++] = t;
+  if (os.thread_peer_ix >= OS_THREAD_PEERS) {
+    os.thread_peer_ix = 0;
+  }
+#endif
+  __os_exit_critical_kernel();
+
+  __os_enable_preemption();
+
+  return 0;
+}
+
+os_thread *OS_thread_self() {
+  return os.current_thread;
+}
+
+u32_t OS_thread_self_id() {
+  return os.current_thread->id;
+}
+
+u32_t OS_thread_id(os_thread *t) {
+  return t->id;
+}
+
+u32_t OS_thread_yield(void) {
+  ASSERT(g_crit_entry == 0);
+  OS_svc_1((void*)OS_SVC_YIELD,0,0,0);
+  return OS_thread_self()->ret_val;
+}
+
+void OS_thread_join(os_thread *t) {
+  os_thread *self = OS_thread_self();
+  ASSERT(self);
+  ASSERT(t != self);
+  __os_enter_critical_kernel();
+  if (t->flags & OS_THREAD_FLAG_ALIVE) {
+    list_delete(&os.q_running, OS_ELEMENT(self));
+    list_add(&t->q_join, OS_ELEMENT(self));
+  }
+  __os_exit_critical_kernel();
+}
+
+u32_t OS_mutex_init(os_mutex *m, u32_t attrs) {
+  m->lock = 0;
+  m->owner = 0;
+  m->attrs = attrs;
+  list_init(&m->q_block);
+#if OS_DBG_MON & OS_MUTEX_PEERS > 0
+  os.mutex_peers[os.mutex_peer_ix++] = m;
+  if (os.mutex_peer_ix >= OS_MUTEX_PEERS) {
+    os.mutex_peer_ix = 0;
+  }
+#endif
+  return 0;
+}
+
+void OS_thread_sleep(time delay) {
+  os_thread *self = OS_thread_self();
+  time awake = SYS_get_time_ms() + delay;
+  __os_enter_critical_kernel();
+  list_delete(&os.q_running, OS_ELEMENT(self));
+  list_set_order(OS_ELEMENT(self), awake);
+  list_sort_insert(&os.q_sleep, OS_ELEMENT(self));
+  os.first_awake = MIN(awake, os.first_awake);
+  self->flags |= OS_THREAD_FLAG_SLEEP;
+  __os_exit_critical_kernel();
+  (void)OS_thread_yield();
+}
+
+static u32_t OS_mutex_lock_internal(os_mutex *m) {
+  os_thread *self = OS_thread_self();
+  bool taken = TRUE;
+  ASSERT(m->owner != self);
+  u32_t res = 0;
+
+  do {
+    taken = TRUE;
+    u32_t v;
+    // try setting mutex flag to busy
+    do {
+      v =  __LDREXW(&m->lock);
+      if (v) {
+        __CLREX();  // removes the local exclusive access tag for the processor
+        taken = FALSE;
+        break;
+      }
+    } while (__STREXW(1, &m->lock));
+
+    if (!taken) {
+      // mutex already busy
+      __os_enter_critical_kernel();
+      list_delete(&os.q_running, OS_ELEMENT(self));
+      list_add(&m->q_block, OS_ELEMENT(self));
+      __os_exit_critical_kernel();
+      res = OS_thread_yield();
+    } else {
+      // mutex taken
+      __os_enter_critical_kernel();
+      m->owner = self;
+#if OS_DBG_MON
+      m->entered++;
+#endif
+      if ((m->attrs & OS_MUTEX_ATTR_CRITICAL_IRQ) == 0) {
+        __os_exit_critical_kernel();
+      }
+
+    }
+  } while (!taken);
+  return res;
+}
+
+u32_t OS_mutex_lock(os_mutex *m) {
+  u32_t r;
+  r = OS_mutex_lock_internal(m);
+  return r;
+}
+
+u32_t OS_mutex_unlock_internal(os_mutex *m) {
+  ASSERT(m->owner == OS_thread_self());
+
+  // reinsert all waiting threads to running queue
+  __os_enter_critical_kernel();
+  list_move(&os.q_running, &m->q_block);
+  // reset mutex
+  m->lock = 0;
+  m->owner = 0;
+#if OS_DBG_MON
+      m->exited++;
+#endif
+  __os_exit_critical_kernel();
+  if (m->attrs & OS_MUTEX_ATTR_CRITICAL_EXIT) {
+    __os_reset_critical_kernel();
+  } else if (m->attrs & OS_MUTEX_ATTR_CRITICAL_IRQ) {
+    __os_exit_critical_kernel();
+  }
+
+  return 0;
+}
+
+u32_t OS_mutex_unlock(os_mutex *m) {
+  u32_t r;
+  r = OS_mutex_unlock_internal(m);
+  return r;
+}
+
+bool OS_mutex_try_lock(os_mutex *m) {
+  os_thread *self = OS_thread_self();
+  bool taken = TRUE;
+
+  ASSERT(m->owner != self);
+
+  // try setting mutex flag to busy
+  do {
+    u32_t v;
+    v =  __LDREXW(&m->lock);
+    if (v) {
+      __CLREX();  // removes the local exclusive access tag for the processor
+      taken = FALSE;
+      break;
+    }
+  } while (__STREXW(1, &m->lock));
+
+  if (!taken) {
+    // mutex already busy
+    return FALSE;
+  }
+
+  m->owner = self;
+
+  return TRUE;
+}
+
+u32_t OS_cond_init(os_cond *c) {
+  c->this.type = OS_COND;
+  list_set_order(OS_ELEMENT(c), OS_FOREVER);
+  list_init(&c->q_block);
+  list_init(&c->q_sleep);
+#if OS_DBG_MON
+  c->waiting = 0;
+  c->signalled = 0;
+  c->broadcasted = 0;
+  os.cond_peers[os.cond_peer_ix++] = c;
+  if (os.cond_peer_ix >= OS_COND_PEERS) {
+    os.cond_peer_ix = 0;
+  }
+#endif
+  return 0;
+}
+
+u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
+  os_thread *self = OS_thread_self();
+  u32_t r;
+  __os_enter_critical_kernel();
+  (void)OS_mutex_unlock_internal(m);
+  list_delete(&os.q_running, OS_ELEMENT(self));
+  list_add(&c->q_block, OS_ELEMENT(self));
+  c->mutex = m;
+#if OS_DBG_MON
+  c->waiting++;
+#endif
+  __os_exit_critical_kernel();
+  r = OS_thread_yield();
+  (void)OS_mutex_lock_internal(m);
+  return r;
+}
+
+u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
+  bool into_sleep_queue;
+  u32_t r;
+  os_thread *self = OS_thread_self();
+  self->ret_val = TRUE;
+  __os_enter_critical_kernel();
+  into_sleep_queue = c->has_sleepers;
+  time awake = SYS_get_time_ms() + delay;
+  list_delete(&os.q_running, OS_ELEMENT(self));
+  list_set_order(OS_ELEMENT(self), awake);
+  list_sort_insert(&c->q_sleep, OS_ELEMENT(self));
+
+  c->has_sleepers = TRUE;
+
+  if (list_get_order(OS_ELEMENT(c)) > awake) {
+    list_set_order(OS_ELEMENT(c), awake);
+  }
+  if (into_sleep_queue) {
+    // remove first so placement is updated
+    list_delete(&os.q_sleep, OS_ELEMENT(c));
+  }
+  // insert into sleep queue
+  list_sort_insert(&os.q_sleep, OS_ELEMENT(c));
+
+  os.first_awake = MIN(awake, os.first_awake);
+  c->mutex = m;
+#if OS_DBG_MON
+  c->waiting++;
+#endif
+  __os_exit_critical_kernel();
+  r = OS_thread_yield();
+  (void)OS_mutex_lock_internal(m);
+  return r;
+}
+
+
+u32_t OS_cond_signal(os_cond *c) {
+  __os_enter_critical_kernel();
+  os_thread *t = OS_THREAD(list_first(&c->q_block));
+  if (t != NULL) {
+    list_delete(&c->q_block, OS_ELEMENT(t));
+    list_add(&os.q_running, OS_ELEMENT(t));
+#if OS_DBG_MON
+  c->signalled++;
+#endif
+  }
+  __os_exit_critical_kernel();
+  return 0;
+}
+
+u32_t OS_cond_broadcast(os_cond *c) {
+  __os_enter_critical_kernel();
+  list_move(&os.q_running, &c->q_block);
+#if OS_DBG_MON
+  c->broadcasted++;
+#endif
+  __os_exit_critical_kernel();
+  return 0;
+}
+
+
+void OS_svc_0(void *arg, ...) {
+  asm volatile (
+      "svc 0\n"
+  );
+}
+
+void OS_svc_1(void *arg, ...) {
+  asm volatile (
+      "svc 1\n"
+  );
+}
+
+void OS_svc_2(void *arg, ...) {
+  asm volatile (
+      "svc 2\n"
+  );
+}
+
+void OS_svc_3(void *arg, ...) {
+  asm volatile (
+      "svc 3\n"
+  );
+}
+
+void OS_init(void) {
+  u32_t ticks = SystemCoreClock/8;
+  ticks /= 1024;
+  memset(&os, 0, sizeof(os));
+  list_init(&os.q_running);
+  list_init(&os.q_sleep);
+  os.first_awake = OS_FOREVER;
+
+
+  NVIC_SetPriority(PendSV_IRQn, 0x3); // set PendSV to lowest level
+
+  SysTick->LOAD  = (ticks & SysTick_LOAD_RELOAD_Msk) - 1; // set reload reg
+  SysTick->VAL   = 0;
+  SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk;
+  SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);
+  NVIC_SetPriority(SysTick_IRQn, 0x3); // set Systick to lowest level
+}
+
+#if OS_DBG_MON
+static void OS_DBG_print_thread_list(list_t *l, bool detail, int indent);
+
+bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
+  if (t == NULL) return FALSE;
+  char tab[32];
+  memset(tab, ' ', sizeof(tab));
+  tab[indent] = 0;
+  print("%sthread addr:%08x  id:%04i  name:%s  order:%08x\n", tab,
+      t, t->id, t->name == NULL ? "<n/a>" : t->name, t->this.e.sort_order);
+  if (!detail) return TRUE;
+  print("%s       func:%08x  flags:%08x\n", tab,
+      t->func, t->flags);
+  print("%s       sp:  %08x", tab,
+      t->sp);
+#if OS_STACK_CHECK
+  print(" [%s]  ", (t->sp < t->stack_start || t->sp > t->stack_end) ? "BPTR":" ok ");
+  bool sp_start_bad = t->stack_start < RAM_BEGIN || t->stack_start > RAM_END;
+  bool sp_end_bad = t->stack_end < t->stack_start || t->stack_end > RAM_END;
+  print("  sp_start:%08x [%s]  sp_end:%08x [%s]",
+      t->stack_start,
+      sp_start_bad ? "BADR" : (*(u32_t*)(t->stack_start - 4) != OS_STACK_START_MARKER ? "CRPT" : " ok "),
+      t->stack_end,
+      sp_end_bad ? "BADR" : (*(u32_t*)(t->stack_end) != OS_STACK_END_MARKER ? "CRPT" : " ok ")
+          );
+#if OS_STACK_USAGE_CHECK
+  if (!sp_start_bad && !sp_end_bad) {
+    // for descending stacks
+    u32_t used_entries = 0;
+    u32_t *s = (u32_t *)t->stack_start;
+    while (s[used_entries] == _STACK_USAGE_MARK_32 && (void *)&s[used_entries] < t->stack_end) {
+      used_entries++;
+    }
+    u32_t perc = 100 - ((100 * used_entries) / ((t->stack_end - t->stack_start)/sizeof(u32_t)));
+    print("  used:%i%", perc);
+  }
+#endif
+#endif
+  print("\n");
+
+  if (!list_empty(&t->q_join)) {
+    print("%s       Join List (%i): \n", tab,
+        list_count(&t->q_join));
+    OS_DBG_print_thread_list(&t->q_join, FALSE, indent + 9);
+  }
+  return TRUE;
+}
+
+static void OS_DBG_print_thread_list(list_t *l, bool detail, int indent) {
+  element_t *cur = list_first(l);
+  while (cur) {
+    OS_DBG_print_thread(OS_THREAD(cur), detail, indent);
+    cur = list_next(cur);
+  }
+}
+
+static void OS_DBG_list_threads() {
+  int i;
+  print("Running\n-------\n");
+  OS_DBG_print_thread(os.current_thread, TRUE, 2);
+  print("Scheduled\n---------\n");
+  OS_DBG_print_thread_list(&os.q_running, TRUE, 2);
+  print("Sleeping\n--------\n");
+  OS_DBG_print_thread_list(&os.q_sleep, TRUE, 2);
+  print("Thread peers\n------------\n");
+  for (i = 0; i < OS_THREAD_PEERS; i++) {
+    OS_DBG_print_thread(os.thread_peers[i], TRUE, 2);
+  }
+}
+
+bool OS_DBG_print_mutex(os_mutex *m, bool detail, int indent) {
+  if (m == NULL) return FALSE;
+  char tab[32];
+  memset(tab, ' ', sizeof(tab));
+  tab[indent] = 0;
+  print("%smutex  addr:%08x  lock:%08x  attr:%08x\n", tab, m, m->lock, m->attrs);
+  if (!detail) return TRUE;
+  print("%s       owner: ", tab);
+  if (!OS_DBG_print_thread(m->owner, FALSE, indent+2)) {
+    print("\n");
+  }
+  print("%s       entries:%i  exits:%i\n", tab, m->entered, m->exited);
+  if (!list_empty(&m->q_block)) {
+    print("%s       Blocked List (%i)\n", tab, list_count(&m->q_block));
+    OS_DBG_print_thread_list(&m->q_block, FALSE, indent + 9);
+  }
+  return TRUE;
+
+}
+
+static void OS_DBG_list_mutexes() {
+  int i;
+  print("Mutex peers\n-----------\n");
+  for (i = 0; i < OS_MUTEX_PEERS; i++) {
+    OS_DBG_print_mutex(os.mutex_peers[i], 2, TRUE);
+  }
+}
+
+bool OS_DBG_print_cond(os_cond *c, bool detail, int indent) {
+  if (c == NULL) return FALSE;
+  char tab[32];
+  memset(tab, ' ', sizeof(tab));
+  tab[indent] = 0;
+  print("%scond   addr:%08x  sleepers:%s  order:%08x\n", tab,
+      c,  c->has_sleepers? "YES":"NO ", c->this.e.sort_order);
+  print("%s       mutex: ", tab);
+  if (!OS_DBG_print_mutex(c->mutex, FALSE, indent + 2)) {
+    print("\n");
+  }
+  if (!detail) return TRUE;
+  print("%s       waits:%i  signals:%i  broadcasts:%i\n", tab,
+      c->waiting, c->signalled, c->broadcasted);
+  if (!list_empty(&c->q_block)) {
+    print("%s       Blocked List (%i)\n", tab, list_count(&c->q_block));
+    OS_DBG_print_thread_list(&c->q_block, FALSE, indent + 9);
+  }
+  if (!list_empty(&c->q_sleep)) {
+    print("%s       TimedWait List (%i)\n", tab, list_count(&c->q_sleep));
+    OS_DBG_print_thread_list(&c->q_sleep, FALSE, indent + 9);
+  }
+  return TRUE;
+}
+
+static void OS_DBG_list_conds() {
+  int i;
+  print("Cond peers\n----------\n");
+  for (i = 0; i < OS_COND_PEERS; i++) {
+    OS_DBG_print_cond(os.cond_peers[i], 2, TRUE);
+  }
+}
+
+void OS_DBG_list_all() {
+  print("OS INFO\n-------\n");
+  print("  Scheduled threads: %i\n", list_count(&os.q_running));
+  print("  Sleeping threads:  %i\n", list_count(&os.q_sleep));
+  print("  Spawned threads:   %i\n", g_id);
+  print("  Critical depth:    %i\n", g_crit_entry);
+  print("  Preemption:        %s\n", os.preemption ? "ON":"OFF");
+  print("  First awake:       %08x (%08x in future)\n", os.first_awake, os.first_awake - SYS_get_tick());
+  OS_DBG_list_threads();
+  OS_DBG_list_mutexes();
+  OS_DBG_list_conds();
+}
+
+void OS_DBG_dump() {
+  bool pre = OS_enter_critical();
+  OS_DBG_list_all();
+  OS_exit_critical(pre);
+}
+
+#ifdef OS_DUMP_IRQ
+void OS_DBG_dump_irq() {
+  if(EXTI_GetITStatus(OS_DUMP_IRQ_EXTI_LINE) != RESET) {
+    OS_DBG_list_all();
+    EXTI_ClearITPendingBit(OS_DUMP_IRQ_EXTI_LINE);
+  }
+}
+
+#endif
+
+#endif // OS_DBG_MON
+
