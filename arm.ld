@@ -48,10 +48,8 @@ SECTIONS
     /**(.vfp11_veneer)*/
     /**(.eh_frame)*/
 
-    *(.rodata)         /* .rodata sections (constants, strings, etc.) */
-    *(.rodata.*)       /* .rodata* sections (constants, strings, etc.) */
-/*    *(EXCLUDE_FILE (*bootloader*) .rodata)         /* .rodata sections (constants, strings, etc.) */
-/*    *(EXCLUDE_FILE (*bootloader*) .rodata.*)       /* .rodata* sections (constants, strings, etc.) */
+    *(EXCLUDE_FILE (*bootloader*) .rodata)         /* .rodata sections (constants, strings, etc.) */
+    *(EXCLUDE_FILE (*bootloader*) .rodata.*)       /* .rodata* sections (constants, strings, etc.) */
     *(.gnu.linkonce.r.*)
 
     *(.ARM.extab* .gnu.linkonce.armextab.*)
@@ -120,6 +118,8 @@ SECTIONS
   .bootloader_data _bootloader_data_vaddr : AT ( _bootloader_data_laddr )
   {
     _bootloader_data_vma_start = .;
+    *bootloader*(.rodata)         /* .rodata sections (constants, strings, etc.) */
+    *bootloader*(.rodata.*)       /* .rodata sections (constants, strings, etc.) */
     *(.bootloader_data)
     *(.bootloader_data.*)
     _bootloader_data_vma_end = .;

@@ -9,7 +9,7 @@
 #define UART_H_
 
 #include "stm32f10x.h"
-#include "system_config.h"
+#include "system.h"
 #include "taskq.h"
 
 #define UART_RX_BUFFER          512

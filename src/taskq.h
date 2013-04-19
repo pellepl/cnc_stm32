@@ -37,7 +37,8 @@ typedef struct task_timer_s {
   time recurrent_time;
   u32_t arg;
   void* arg_p;
-  u8_t alive;
+  bool alive;
+  const char *name;
   struct task_timer_s *_next;
 } task_timer;
 
@@ -88,7 +89,8 @@ u8_t TASK_is_running(task* t);
  * @param start_time the delta time from now to schedule task
  * @param recurrent_time the delta time of recurrence, or 0 for no recurrence
  */
-void TASK_start_timer(task *task, task_timer* timer, u32_t arg, void *arg_p, time start_time, time recurrent_time);
+void TASK_start_timer(task *task, task_timer* timer, u32_t arg, void *arg_p, time start_time, time recurrent_time,
+    const char *name);
 /**
  * Reschedules given timer for new recurrent time.
  * New reschedule time won't be effective until timer has been executed after

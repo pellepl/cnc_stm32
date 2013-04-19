@@ -54,17 +54,20 @@
 // internal flash start address
 #define FLASH_START       FLASH_BASE
 // internal flash page erase size
-#define FLASH_PAGE_SIZE   0x400 // md
+#define FLASH_PAGE_SIZE   0x800 // hd
 // internal flash protection/unprotection for firmware
 #define FLASH_PROTECT     FLASH_WRProt_AllPages
 // internal flash total size in bytes
-#define FLASH_TOTAL_SIZE  (512*1024) // md
+#define FLASH_TOTAL_SIZE  (512*1024) // hd
 
 // firmware upgrade placement on spi flash
-#define FIRMWARE_SPIF_ADDRESS   \
+#define FIRMWARE_SPIF_ADDRESS_BASE   \
   (FLASH_M25P16_SIZE_TOTAL - \
       ((FLASH_TOTAL_SIZE+sizeof(fw_upgrade_info))/FLASH_M25P16_SIZE_SECTOR_ERASE)*FLASH_M25P16_SIZE_SECTOR_ERASE - \
       FLASH_M25P16_SIZE_SECTOR_ERASE)
+
+#define FIRMWARE_SPIF_ADDRESS_META (FIRMWARE_SPIF_ADDRESS_BASE)
+#define FIRMWARE_SPIF_ADDRESS_DATA (FIRMWARE_SPIF_ADDRESS_BASE + sizeof(fw_upgrade_info))
 
 #ifndef USER_HARDFAULT
 // enable user hardfault handler
@@ -309,7 +312,10 @@ typedef uint16_t hw_io_pin;
 #define LED_SPI_FLASH_BIT     1
 #define LED_SPI_FLASH         (1<<LED_SPI_FLASH_BIT)
 
-/** DEBUG OUTPUT **/
+/** DEBUG **/
+
+// disable all asserts
+//#define ASSERT_OFF
 
 // disable all debug output
 //#define DBG_OFF
@@ -390,7 +396,7 @@ typedef uint16_t hw_io_pin;
 
 #else // DBG_OFF
 
-#define D_SYS    0
+#define D_SYS     0
 #define D_APP     0
 #define D_TASK    0
 #define D_OS      0

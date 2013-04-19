@@ -8,7 +8,6 @@
 #ifndef CNC_CONTROL_H_
 #define CNC_CONTROL_H_
 
-#include "types.h"
 #include "system.h"
 
 #define CNC_TIMER_FREQ        (SYS_MAIN_TIMER_FREQ)

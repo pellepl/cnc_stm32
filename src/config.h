@@ -8,7 +8,7 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
-#include "system_config.h"
+#include "system.h"
 
 /***** Run time configuration *****/
 

@@ -24,7 +24,7 @@
 #include "enc28j60.h"
 #include "enc28j60_spi_eth.h"
 #endif
-#include "bootloader_exec.h"
+#include "bl_exec.h"
 
 static u8_t in[256];
 
@@ -89,6 +89,7 @@ static int f_dbg();
 static int f_spifinit();
 static int f_spifpro();
 static int f_spifrd(int, int);
+static int f_spifrdb(void *, int);
 static int f_spifer(int, int);
 static int f_spifwr(int, int);
 static int f_spifcl(int);
@@ -833,6 +834,10 @@ static cmd c_tbl[] = {
         .help = "Read spi flash dev\n"\
         "spifrd <addr> <len>\n"
     },
+    {.name = "spifrdb",     .fn = (func)f_spifrdb,
+        .help = "Read spi flash dev, output binary\n"\
+        "spifrdb <addr> <len>\n"
+    },
     {.name = "spifer",     .fn = (func)f_spifer,
         .help = "Erase spi flash dev\n"\
             "spifer <addr> <len>\n" \
@@ -1414,15 +1419,26 @@ static int f_udisconnect() {
 #ifdef CONFIG_SPI
 static u8_t *spi_buf = 0;
 static u16_t spi_buflen;
+static bool binary = FALSE;
 
 static void test_spi_finished(spi_flash_dev *dev, int res) {
   print("spif callback, res %i\n", res);
   if (spi_buf) {
-    int i;
-    for (i = 0; i < spi_buflen; i++) {
-      print("%02x", spi_buf[i]);
+    if (binary) {
+      binary = FALSE;
+      print("\nZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ");
+      int i;
+      for (i = 0; i < spi_buflen; i++) {
+        print("%c", spi_buf[i]);
+      }
+      print("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n");
+    } else {
+      int i;
+      for (i = 0; i < spi_buflen; i++) {
+        print("%02x", spi_buf[i]);
+      }
+      print("\n");
     }
-    print("\n");
     HEAP_free(spi_buf);
     spi_buf = 0;
   }
@@ -1462,6 +1478,28 @@ static int f_spifrd(int addr, int len) {
   spi_buf = HEAP_malloc(spi_buflen);
   memset(spi_buf, 0xee, spi_buflen);
   print("spif read..");
+  int res = SPI_FLASH_read(SPI_FLASH, test_spi_finished, addr, len, spi_buf);
+  print (" res %i\n", res);
+  return 0;
+}
+
+static int f_spifrdb(void *addr_v, int len) {
+  if (_argc != 2) {
+    return -1;
+  }
+  u32_t addr;
+  if (IS_STRING(addr_v) && strcmp("FW_META", addr_v) == 0) {
+    addr = FIRMWARE_SPIF_ADDRESS_META;
+  } else if (IS_STRING(addr_v) && strcmp("FW_DATA", addr_v) == 0) {
+      addr = FIRMWARE_SPIF_ADDRESS_DATA;
+  } else {
+    addr = (u32_t)addr_v;
+  }
+  binary = TRUE;
+  spi_buflen = len;
+  spi_buf = HEAP_malloc(spi_buflen);
+  memset(spi_buf, 0xee, spi_buflen);
+  print("spif read binary %08x..", addr);
   int res = SPI_FLASH_read(SPI_FLASH, test_spi_finished, addr, len, spi_buf);
   print (" res %i\n", res);
   return 0;

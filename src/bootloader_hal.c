@@ -4,7 +4,7 @@
 
 // UART helpers
 
-void b_put(char c) {
+BOOTLOADER_TEXT void b_put(char c) {
   while ((boot.uart_hw->SR & USART_SR_TXE )== 0);
   boot.uart_hw->DR = (c & (u16_t) 0x01FF);
 }
@@ -46,6 +46,7 @@ BOOTLOADER_TEXT void b_puthex8(u8_t x) {
 }
 
 BOOTLOADER_TEXT void b_putint(s32_t x) {
+
   if (x < 0) {
     x = -x;
     b_put('-');
@@ -53,10 +54,17 @@ BOOTLOADER_TEXT void b_putint(s32_t x) {
   if (x == 0) {
     b_put('0');
   }
+  u8_t len = 0;
+  char b[32];
   while (x > 0) {
     u8_t c = (x % 10);
-    b_put('0' + c);
+    b[len] = ('0' + c);
     x /= 10;
+    len++;
+  }
+  u8_t i = 0;
+  while (i++ < len) {
+    b_put(b[len-i]);
   }
 }
 
@@ -95,18 +103,16 @@ BOOTLOADER_TEXT void b_putint(s32_t x) {
 BOOTLOADER_TEXT static FLASH_res _b_flash_status() {
   FLASH_res res = FLASH_OK;
 
-  if ((FLASH->SR & FLASH_FLAG_BANK1_BSY )== FLASH_FLAG_BSY) {
+  if ((FLASH->SR & FLASH_FLAG_BANK1_BSY) == FLASH_FLAG_BSY) {
     res = FLASH_ERR_BUSY;
+  } else if ((FLASH->SR & FLASH_FLAG_BANK1_PGERR) != 0) {
+    BLDBG("FLASH_ERR_OTHER\n");
+    res = FLASH_ERR_OTHER;
+  } else if ((FLASH->SR & FLASH_FLAG_BANK1_WRPRTERR) != 0) {
+    BLDBG("FLASH_ERR_WRP\n");
+    res = FLASH_ERROR_WRP;
   } else {
-    if ((FLASH->SR & FLASH_FLAG_BANK1_PGERR )!= 0){
-      res = FLASH_ERR_OTHER;
-    } else {
-      if ((FLASH->SR & FLASH_FLAG_BANK1_WRPRTERR )!= 0 ){
-        res = FLASH_ERROR_WRP;
-      } else {
-        res = FLASH_COMPLETE;
-      }
-    }
+    res = FLASH_OK;
   }
 
   return res;
@@ -115,9 +121,12 @@ BOOTLOADER_TEXT static FLASH_res _b_flash_status() {
 BOOTLOADER_TEXT static FLASH_res _b_flash_wait(u32_t timeout) {
   FLASH_res res;
 
-  while (((res = _b_flash_status()) == FLASH_ERR_BUSY) && timeout--)
-    ;
-  if (timeout == 0x00) {
+  while (((res = _b_flash_status()) == FLASH_ERR_BUSY) && timeout) {
+    timeout--;
+  }
+
+  if (timeout == 0) {
+    BLDBG("FLASH_ERR_TIMEOUT\n");
     res = FLASH_ERR_TIMEOUT;
   }
 
@@ -127,6 +136,7 @@ BOOTLOADER_TEXT static FLASH_res _b_flash_wait(u32_t timeout) {
 BOOTLOADER_TEXT static FLASH_res _b_flash_erase_option_bytes(void) {
   u16_t rdptmp = RDP_Key;
 
+  BLDBG("FLASH: erase option bytes\n");
   FLASH_res res = FLASH_OK;
 
   /* Get the actual read protection Option Byte value */
@@ -176,6 +186,8 @@ BOOTLOADER_TEXT static FLASH_res _b_flash_erase_option_bytes(void) {
 BOOTLOADER_TEXT static FLASH_res _b_set_write_protection(u32_t FLASH_Pages) {
   u16_t WRP0_Data = 0xFFFF, WRP1_Data = 0xFFFF, WRP2_Data = 0xFFFF, WRP3_Data =
       0xFFFF;
+
+  BLDBG("FLASH: protect\n");
 
   FLASH_res res = FLASH_OK;
 
@@ -228,20 +240,26 @@ BOOTLOADER_TEXT static FLASH_res _b_set_write_protection(u32_t FLASH_Pages) {
 
 BOOTLOADER_TEXT void b_flash_open() {
   // unlock flash block
+  BLDBG("FLASH: open\n");
+
   // FLASH_UnlockBank1()
   FLASH->KEYR = FLASH_KEY1;
   FLASH->KEYR = FLASH_KEY2;
   // clear flags
-  FLASH->SR = (FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR );
+  FLASH->SR = (FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR );
 }
 
 BOOTLOADER_TEXT void b_flash_close() {
   //FLASH_LockBank1();
+  BLDBG("FLASH: close\n");
+
   FLASH->CR |= CR_LOCK_Set;
 }
 
 BOOTLOADER_TEXT FLASH_res b_flash_erase(u32_t addr) {
   // FLASH_ErasePage(BANK2_WRITE_START_ADDR + (FLASH_PAGE_SIZE * EraseCounter));
+  BLDBG("FLASH: erase\n");
+
   FLASH_res status = _b_flash_wait(FLASH_TIMEOUT );
 
   if (status == FLASH_OK) {
@@ -258,36 +276,29 @@ BOOTLOADER_TEXT FLASH_res b_flash_erase(u32_t addr) {
   return status;
 }
 
-BOOTLOADER_TEXT FLASH_res b_flash_write(u32_t addr, u32_t data) {
-  //FLASH_ProgramWord(Address, Data);
-  FLASH_Status status = _b_flash_wait(FLASH_TIMEOUT );
+BOOTLOADER_TEXT FLASH_res b_flash_write_hword(u32_t addr, u16_t data) {
+  //FLASH_ProgramHalfWord(Address, Data);
+  BLDBG("FLASH: write\n");
+  FLASH_res res = _b_flash_wait(FLASH_TIMEOUT);
 
-  if (status == FLASH_COMPLETE) {
+  if (res == FLASH_OK) {
     // if the previous operation is completed, proceed to program the new first
     // half word
     FLASH->CR |= CR_PG_Set;
 
     *(__IO uint16_t*) addr = (uint16_t) data;
-    status = _b_flash_wait(FLASH_TIMEOUT );
-
-    if (status == FLASH_COMPLETE) {
-      // if the previous operation is completed, proceed to program the new second
-      // half word
-      addr += 2;
-
-      *(__IO uint16_t*) addr = data >> 16;
-      status = _b_flash_wait(FLASH_TIMEOUT );
-
-    }
-    // Disable the PG Bit
-    FLASH->CR &= CR_PG_Reset;
+    res = _b_flash_wait(FLASH_TIMEOUT);
   }
+  // Disable the PG Bit
+  FLASH->CR &= CR_PG_Reset;
 
-  return status;
+  return res;
 }
 
 BOOTLOADER_TEXT FLASH_res b_flash_unprotect() {
   FLASH_res res;
+  BLDBG("FLASH: unprotect\n");
+
   u32_t WRPR_Value = FLASH->WRPR;
   // Get pages already write protected
   u32_t pages = ~(WRPR_Value | FLASH_PROTECT );
@@ -302,6 +313,7 @@ BOOTLOADER_TEXT FLASH_res b_flash_unprotect() {
 
 BOOTLOADER_TEXT FLASH_res b_flash_protect() {
   FLASH_res res;
+  BLDBG("FLASH: protect\n");
   u32_t WRPR_Value = FLASH->WRPR;
   // Get current write protected pages and the new pages to be protected
   u32_t pages = ~(WRPR_Value) | FLASH_PROTECT;

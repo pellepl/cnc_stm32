@@ -1,8 +1,4 @@
 #include "miniutils.h"
-
-#define MAX_BASE_10   1000000000
-
-
 #include "uart.h"
 
 #define PUTC(p, c)  \
@@ -384,6 +380,15 @@ char* strncontainex(const char* s, const char* content, int len) {
     }
   }
   return 0;
+}
+
+unsigned short crc_ccitt_16(unsigned short crc, unsigned char data) {
+  crc  = (unsigned char)(crc >> 8) | (crc << 8);
+  crc ^= data;
+  crc ^= (unsigned char)(crc & 0xff) >> 4;
+  crc ^= (crc << 8) << 4;
+  crc ^= ((crc & 0xff) << 4) << 1;
+  return crc;
 }
 
 void quicksort(int* orders, void** pp, int elements) {

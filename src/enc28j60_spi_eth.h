@@ -8,7 +8,7 @@
 #ifndef ENC28J60_SPI_ETH_H_
 #define ENC28J60_SPI_ETH_H_
 
-#include "system_config.h"
+#include "system.h"
 
 void ETH_SPI_init();
 void ETH_SPI_start();

@@ -8,8 +8,8 @@
 #ifndef SYSTEM_H_
 #define SYSTEM_H_
 
-#include "stm32f10x.h"
 #include "system_config.h"
+#include "stm32f10x.h"
 #include "types.h"
 
 enum reboot_reason_e {
@@ -24,13 +24,16 @@ enum reboot_reason_e {
 
 #include "shared_mem.h"
 
-
+#ifdef ASSERT_OFF
+#define ASSERT(x) do {} while(0);
+#else
 #define ASSERT(x) \
 do { \
   if (!(x)) {\
     SYS_assert(__FILE__, __LINE__);\
   }\
 } while (0);
+#endif
 
 // want to keep DBG as macro giving compiler opportunity to optimize away all
 // occurrences of DBG masks being 0
@@ -40,8 +43,10 @@ extern const char* __dbg_level_str[4];
 #else
 #define DBG_LEVEL_PRINT
 #endif
+
 #ifdef DBG_OFF
-#define DBG(mask, level, f, ...)
+#define DBG(mask, level, f, ...) do {} while(0);
+#define IF_DBG(mask, level) while (0)
 #else
 #define DBG(mask, level, f, ...) do { \
      if (((mask) & __dbg_mask) && level >= __dbg_level) { \
@@ -54,6 +59,7 @@ extern const char* __dbg_level_str[4];
        print((f), ## __VA_ARGS__); \
      } \
   } while (0)
+#define IF_DBG(mask, level) if (((mask) & __dbg_mask) && level >= __dbg_level)
 #endif
 /**
  * Called at startup

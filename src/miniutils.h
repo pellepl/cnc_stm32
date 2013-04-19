@@ -67,6 +67,7 @@ char* strcpy(char* d, const char* s);
 const char* strchr(const char* str, int ch);
 char* strpbrk(const char* str, const char* key);
 char* strstr(const char* str1, const char* str2);
+unsigned short crc_ccitt_16(unsigned short crc, unsigned char data);
 void quicksort(int* orders, void** pp, int elements);
 void quicksortCmp(int* orders, void** pp, int elements,
     int(*orderfunc)(void* p));

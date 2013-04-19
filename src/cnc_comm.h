@@ -8,7 +8,7 @@
 #ifndef CNC_COMM_H_
 #define CNC_COMM_H_
 
-#include "types.h"
+#include "system.h"
 #include "comm.h"
 
 #define CNC_COMM_VERSION                  0x00010000

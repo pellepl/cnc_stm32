@@ -162,7 +162,6 @@ static s16_t seq_delta(u16_t seqnoCurrent, u16_t seqnoLastRegistered) {
 /* received stuff from rx->src, in here one might to call comm_app_reply  */
 //typedef int (*comm_app_user_rx_fn)(comm *comm, comm_arg *rx,  unsigned short len, unsigned char *data);
 static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned char *data) {
-  DBG(D_COMM, D_DEBUG, "COMM PKT: seq:%03x len:%02x src:%01x flg:%02x\n", rx->seqno, rx->len, rx->src, rx->flags);
   s32_t res = R_COMM_OK;
   _comm.cur_rx = rx;
 
@@ -170,7 +169,6 @@ static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned c
   // keep track of latest 32 received packet sequence numbers
   s16_t seqd = seq_delta(rx->seqno, _comm.last_seqno);
   u8_t already_received = FALSE;
-  DBG(D_COMM, D_DEBUG, "        : last %03x, delta %i\n", _comm.last_seqno, seqd);
 
   // check if this packet already was received
   if (seqd <= 0) {
@@ -184,8 +182,8 @@ static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned c
     _comm.seq_mask |= 1;
   }
 
-  DBG(D_COMM, D_DEBUG, "        : %s\n", already_received ? "ALREADY RECEIVED": "FRESH");
-
+  DBG(D_COMM, D_DEBUG, "COMM PKT: seq:%03x len:%02x src:%01x flg:%02x last:%03x delta:%i %s\n",
+      rx->seqno, rx->len, rx->src, rx->flags, _comm.last_seqno, seqd, already_received ? "ALREADY RECEIVED": "FRESH");
 
   if (seqd > 0) {
     // got a new packet, register latest seqno
@@ -218,6 +216,7 @@ static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned c
   }
 #endif
 
+#if 0
 #if D_COMM
   {
     int i;
@@ -228,6 +227,7 @@ static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned c
     c[len*3] = 0;
     DBG(D_COMM, D_DEBUG, "%s\n", c);
   }
+#endif
 #endif
 
 #ifdef CONFIG_CNC
@@ -420,7 +420,7 @@ void COMM_init(uart* u) {
 
   // start comm ticker
   _comm.task = TASK_create(COMM_ticker, TASK_STATIC);
-  TASK_start_timer(_comm.task, &_comm.timer, 0, 0, 0, 100);
+  TASK_start_timer(_comm.task, &_comm.timer, 0, 0, 0, 100, "comm_tick");
 
 #if COMM_IMPL_STATS
   clockpoint = SYS_get_time_ms();

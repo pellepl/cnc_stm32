@@ -44,10 +44,10 @@ static void SPI_FLASH_call_task_within_time(spi_flash_dev *sfd, u32_t time, int 
 
     sfd->busy_poll = TRUE;
     sfd->poll_count = 0;
-    TASK_start_timer(sfd->task, &sfd->timer, res, sfd, poll_time, poll_time);
+    TASK_start_timer(sfd->task, &sfd->timer, res, sfd, poll_time, poll_time, "spif_poll");
   } else {
     sfd->busy_poll = FALSE;
-    TASK_start_timer(sfd->task, &sfd->timer, res, sfd, time, 0);
+    TASK_start_timer(sfd->task, &sfd->timer, res, sfd, time, 0, "spif_cb");
   }
 }
 

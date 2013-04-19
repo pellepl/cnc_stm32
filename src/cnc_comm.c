@@ -16,6 +16,9 @@
 #include "comm.h"
 #include "nvstorage.h"
 
+// enable not to hangup on alive ping/pong timeouts
+#define COMM_DBG_DONT_HANGUP
+
 #ifdef CONFIG_CNC
 
 static task *task_sr;
@@ -222,7 +225,7 @@ s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len) {
     // generic call
     DBG(D_APP, D_DEBUG, "CNC_COMM: cmd %02x => func %08x\n", cmd, f);
     LED_blink_single(LED_CNC_COMM_BIT, 2,1,2);
-    if (D_APP) {
+    IF_DBG(D_APP, D_DEBUG) {
       int argcc;
       for (argcc = 0; argcc < argc; argcc++) {
         u8_t *p = &data[argcc*4];
@@ -304,6 +307,7 @@ void CNC_COMM_on_ack(u16_t seq) {
 }
 
 static void CNC_COMM_handle_comm_dead(s32_t err) {
+#ifndef COMM_DBG_DONT_HANGUP
   if (connected) {
     u32_t sr = CNC_get_status();
     if ((sr & (1<<CNC_STATUS_BIT_PIPE_EMPTY)) == 0 ||
@@ -315,6 +319,11 @@ static void CNC_COMM_handle_comm_dead(s32_t err) {
     connected = FALSE;
   }
   COMM_next_channel();
+#else
+  if (!connected) {
+    COMM_next_channel();
+  }
+#endif
 }
 
 void CNC_COMM_on_err(u16_t seq, s32_t err) {
@@ -417,16 +426,16 @@ void CNC_COMM_init() {
   }
   print("Non-volatile offset read, res %i\n", res);
   task_sr = TASK_create(cnc_sr_timer_task, TASK_STATIC);
-  TASK_start_timer(task_sr, &task_sr_timer, 0, NULL, 500, 0);
+  TASK_start_timer(task_sr, &task_sr_timer, 0, NULL, 500, 0, "cnc_sr");
   CNC_COMM_apply_sr_timer_recurrence();
   task_pos = TASK_create(cnc_pos_timer_task, TASK_STATIC);
-  TASK_start_timer(task_pos, &task_pos_timer, 0, NULL, 500, 0);
+  TASK_start_timer(task_pos, &task_pos_timer, 0, NULL, 500, 0, "cnc_pos");
   CNC_COMM_apply_pos_timer_recurrence();
 
   alive_msg_seqno = -1;
   connected = FALSE;
   task_alive = TASK_create(cnc_alive_timer_task, TASK_STATIC);
-  TASK_start_timer(task_alive, &task_alive_timer, 0, NULL, 500, 1000);
+  TASK_start_timer(task_alive, &task_alive_timer, 0, NULL, 500, 1000, "cnc_alive");
 }
 
 #endif // CONFIG_CNC

@@ -9,6 +9,7 @@
 #include "miniutils.h"
 #include "system.h"
 #include "os.h"
+#include "linker_symaccess.h"
 
 static struct {
   task* head;
@@ -49,12 +50,13 @@ static void print_task(task *t, const char *prefix) {
 
 static void print_timer(task_timer *t, const char *prefix, time now) {
   if (t) {
-    print("%s %s  start:%08x (%+08x)  recurrent:%08x\n",
+    print("%s %s  start:%08x (%+08x)  recurrent:%08x [%s]\n",
         prefix,
         t->alive ? "ALIVE": "DEAD ",
         (u32_t)t->start_time,
         (u32_t)(t->start_time - now),
-        (u32_t)(t->recurrent_time));
+        (u32_t)(t->recurrent_time),
+        t->name);
     print_task(t->task, prefix);
   } else {
     print("%s NONE\n", prefix);
@@ -193,16 +195,21 @@ void TASK_run(task* task, u32_t arg, void* arg_p) {
   __os_exit_critical_kernel();
 }
 
-void TASK_start_timer(task *task, task_timer* timer, u32_t arg, void *arg_p, time start_time, time recurrent_time) {
+void TASK_start_timer(task *task, task_timer* timer, u32_t arg, void *arg_p, time start_time, time recurrent_time,
+    const char *name) {
+  __os_enter_critical_kernel();
   task_sys.tim_lock = TRUE;
+  ASSERT(timer->alive == FALSE);
   timer->arg = arg;
   timer->arg_p = arg_p;
   timer->task = task;
   timer->start_time = start_time;
   timer->recurrent_time = recurrent_time;
   timer->alive = TRUE;
+  timer->name = name;
   TASK_insert_timer(timer, SYS_get_time_ms() + start_time);
   task_sys.tim_lock = FALSE;
+  __os_exit_critical_kernel();
 }
 
 void TASK_set_timer_recurrence(task_timer* timer, time recurrent_time) {
@@ -311,9 +318,12 @@ static void TASK_insert_timer(task_timer *timer, time actual_time) {
   } else {
     task_timer *cur_timer = task_sys.first_timer;
     task_timer *prev_timer = 0;
+    int guard = 0;
     while (cur_timer && timer->start_time >= cur_timer->start_time) {
       prev_timer = cur_timer;
       cur_timer = cur_timer->_next;
+      guard++;
+      ASSERT(guard < 1024);
     }
     if (prev_timer == 0) {
       // earliest timer entry
@@ -332,24 +342,33 @@ static void TASK_insert_timer(task_timer *timer, time actual_time) {
 }
 
 void TASK_timer() {
-  if (task_sys.first_timer == 0 || task_sys.tim_lock) {
+  __os_enter_critical_kernel();
+  task_timer *cur_timer = task_sys.first_timer;
+  __os_exit_critical_kernel();
+  if (cur_timer == NULL || task_sys.tim_lock) {
     return;
   }
-  task_timer *cur_timer = task_sys.first_timer;
-  time t;
-  while (cur_timer && cur_timer->start_time <= (t = SYS_get_time_ms())) {
-    cur_timer->start_time = t + cur_timer->recurrent_time;
+  ASSERT((u32_t)cur_timer >= (u32_t)RAM_BEGIN);
+  ASSERT((u32_t)cur_timer <= (u32_t)RAM_END);
+  ASSERT(cur_timer->task >= &task_pool.task[0]);
+  ASSERT(cur_timer->task <= &task_pool.task[_TASK_POOL]);
+
+  while (cur_timer && cur_timer->start_time <= SYS_get_time_ms()) {
     if (!TASK_is_running(cur_timer->task) && cur_timer->alive) {
       // expired, schedule for run
       TASK_run(cur_timer->task, cur_timer->arg, cur_timer->arg_p);
     }
     task_timer *old_timer = cur_timer;
+    __os_enter_critical_kernel();
     cur_timer = cur_timer->_next;
-    old_timer->_next = 0;
+    old_timer->_next = (void*)0xdeaddead;
     task_sys.first_timer = cur_timer;
     if (old_timer->recurrent_time && old_timer->alive) {
       // recurrent, reinsert
-      TASK_insert_timer(old_timer, t + old_timer->recurrent_time);
+      TASK_insert_timer(old_timer, old_timer->start_time + old_timer->recurrent_time);
+    } else {
+      old_timer->alive = FALSE;
     }
+    __os_exit_critical_kernel();
   }
 }

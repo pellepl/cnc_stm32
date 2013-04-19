@@ -24,7 +24,7 @@ builddir = build
 
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.0
 basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
-#/usr/local/gcc/arm-elf-tools-4.6.3
+#basetoolsdir = /usr/local/gcc/arm-elf-tools-4.6.3
 #/home/petera/toolchain/gcc/arm-elf-tools-4.6.2
 codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.7.1/
 stmlibdir = STM32F10x_StdPeriph_Lib_V3.5.0/Libraries
@@ -91,7 +91,7 @@ SFILES = 	$(STARTUP) \
 FILES = 	processor.c \
 			shared_mem.c \
 			main.c \
-			bootloader_exec.c \
+			bl_exec.c \
 			system.c \
 			led.c \
 			nvstorage.c \
