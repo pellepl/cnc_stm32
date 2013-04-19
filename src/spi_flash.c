@@ -93,8 +93,8 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
       } else {
         DBG(D_SPI, D_INFO, "SPIF poll: busy released\n");
       }
-      sfd->busy_poll = FALSE;
       TASK_stop_timer(&sfd->timer);
+      sfd->busy_poll = FALSE;
       TASK_run(sfd->task, res, sfd);
       return;
     }
@@ -194,8 +194,8 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
   // something went wrong, report error
   if (res != SPI_OK) {
     if (sfd->busy_poll) {
-      sfd->busy_poll = FALSE;
       TASK_stop_timer(&sfd->timer);
+      sfd->busy_poll = FALSE;
     }
     sfd->state = SPI_FLASH_STATE_ERROR;
     TASK_run(sfd->task, res, sfd);
@@ -203,14 +203,14 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
 }
 
 /*
- * spi device result callback (might be called from irq, compile flag)
+ * spi device result callback (might be called from irq, flag)
  */
 static void SPI_FLASH_callback_spi_result(spi_dev *dev, int res) {
   spi_flash_dev *sfd = (spi_flash_dev *)((char*)dev - offsetof(spi_flash_dev, dev));
   if (res != SPI_OK) {
     if (sfd->busy_poll) {
-      sfd->busy_poll = FALSE;
       TASK_stop_timer(&sfd->timer);
+      sfd->busy_poll = FALSE;
     }
     sfd->state = SPI_FLASH_STATE_ERROR;
     TASK_run(sfd->task, res, sfd);
@@ -224,6 +224,7 @@ static void SPI_FLASH_callback_spi_result(spi_dev *dev, int res) {
  * to keep state of intermediate operations
  */
 static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
+
   int res = (int)res_u;
   spi_flash_dev *sfd = (spi_flash_dev *)sfd_v;
   ASSERT(sfd);
@@ -244,8 +245,8 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
       DBG(D_SPI, D_INFO, "SPIF poll: device busy\n");
     } else if (res != SPI_OK) {
       DBG(D_SPI, D_INFO, "SPIF poll: ERROR %i\n", res);
-      sfd->busy_poll = FALSE;
       TASK_stop_timer(&sfd->timer);
+      sfd->busy_poll = FALSE;
 
       sfd->state = SPI_FLASH_STATE_ERROR;
       SPI_FLASH_finalize(sfd, res);
