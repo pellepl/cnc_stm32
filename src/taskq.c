@@ -50,12 +50,14 @@ static void print_task(task *t, const char *prefix) {
 
 static void print_timer(task_timer *t, const char *prefix, time now) {
   if (t) {
-    print("%s %s  start:%08x (%+08x)  recurrent:%08x [%s]\n",
+    print("%s %s  %s  start:%08x (%+08x)  recurrent:%08x  next:%08x  [%s]\n",
         prefix,
         t->alive ? "ALIVE": "DEAD ",
+        t->scheduled? "SCHED": "NOSCH ",
         (u32_t)t->start_time,
         (u32_t)(t->start_time - now),
         (u32_t)(t->recurrent_time),
+        (u32_t)(t->_next),
         t->name);
     print_task(t->task, prefix);
   } else {
@@ -310,7 +312,27 @@ u32_t TASK_tick() {
 }
 
 static void TASK_insert_timer(task_timer *timer, time actual_time) {
+  if (timer->scheduled) {
+    // already scheduled, remove old instance
+    task_timer *cur_timer = task_sys.first_timer;
+    task_timer *pre_timer = NULL;
+    while (cur_timer) {
+      if (cur_timer == timer) {
+        if (pre_timer == NULL) {
+          task_sys.first_timer = timer->_next;
+        } else {
+          pre_timer->_next = timer->_next;
+        }
+        break;
+      }
+      pre_timer = cur_timer;
+      cur_timer = cur_timer->_next;
+    }
+  }
+
   timer->start_time = actual_time;
+  timer->scheduled = TRUE;
+
   if (task_sys.first_timer == 0) {
     // first only timer entry
     timer->_next = 0;
@@ -323,7 +345,7 @@ static void TASK_insert_timer(task_timer *timer, time actual_time) {
       prev_timer = cur_timer;
       cur_timer = cur_timer->_next;
       guard++;
-      ASSERT(guard < 1024);
+      ASSERT(guard < 128);
     }
     if (prev_timer == 0) {
       // earliest timer entry
@@ -342,31 +364,29 @@ static void TASK_insert_timer(task_timer *timer, time actual_time) {
 }
 
 void TASK_timer() {
-  __os_enter_critical_kernel();
   task_timer *cur_timer = task_sys.first_timer;
-  __os_exit_critical_kernel();
   if (cur_timer == NULL || task_sys.tim_lock) {
     return;
   }
-  ASSERT((u32_t)cur_timer >= (u32_t)RAM_BEGIN);
-  ASSERT((u32_t)cur_timer <= (u32_t)RAM_END);
-  ASSERT(cur_timer->task >= &task_pool.task[0]);
-  ASSERT(cur_timer->task <= &task_pool.task[_TASK_POOL]);
 
+  task_timer *old_timer = NULL;
   while (cur_timer && cur_timer->start_time <= SYS_get_time_ms()) {
     if (!TASK_is_running(cur_timer->task) && cur_timer->alive) {
       // expired, schedule for run
       TASK_run(cur_timer->task, cur_timer->arg, cur_timer->arg_p);
     }
-    task_timer *old_timer = cur_timer;
+    old_timer = cur_timer;
     __os_enter_critical_kernel();
     cur_timer = cur_timer->_next;
+    // mark timer as executed
     old_timer->_next = (void*)0xdeaddead;
     task_sys.first_timer = cur_timer;
     if (old_timer->recurrent_time && old_timer->alive) {
-      // recurrent, reinsert
-      TASK_insert_timer(old_timer, old_timer->start_time + old_timer->recurrent_time);
+      // recurrent, reinsert: will remove 0xdeaddead from _next
+      old_timer->start_time += old_timer->recurrent_time; // need to set this before inserting for sorting
+      TASK_insert_timer(old_timer, old_timer->start_time);
     } else {
+      old_timer->scheduled = FALSE;
       old_timer->alive = FALSE;
     }
     __os_exit_critical_kernel();

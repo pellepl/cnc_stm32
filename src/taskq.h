@@ -38,6 +38,7 @@ typedef struct task_timer_s {
   u32_t arg;
   void* arg_p;
   bool alive;
+  bool scheduled;
   const char *name;
   struct task_timer_s *_next;
 } task_timer;
