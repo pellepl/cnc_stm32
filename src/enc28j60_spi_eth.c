@@ -40,16 +40,15 @@ static void printbuf(u8_t *buf, u16_t len) {
   }
 }
 
-static void __eth_spi_handle_pkt() {
-  // decrement the packet counter indicate we are done with this packet
-  //enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_PKTDEC);
-  int plen = enc28j60PacketReceive(250, ethspi.rxbuf);
+static void _eth_spi_handle_pkt() {
+  u16_t rx_stat;
+  int plen = enc28j60PacketReceive(500, ethspi.rxbuf, &rx_stat);
   if (plen == 0) {
-    print("ETH: no packet\n");
+    DBG(D_ETH, D_DEBUG, "ethspi no packet, rx_stat:%04x\n", rx_stat);
     return;
   }
-  print("ETH: got packet, len %i\n", plen);
-  printbuf(ethspi.rxbuf, plen);
+  DBG(D_ETH, D_DEBUG, "ethspi got packet, len %i, rx_stat:%04x\n", plen, rx_stat);
+  //printbuf(ethspi.rxbuf, MIN(64, plen));
 
   // arp is broadcast if unknown but a host may also
   // verify the mac address by sending it to
@@ -57,12 +56,13 @@ static void __eth_spi_handle_pkt() {
   if (eth_type_is_arp_and_my_ip(ethspi.rxbuf, plen)) {
     // TODO PETER
     memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
+    DBG(D_ETH, D_DEBUG, "ethspi tx arp\n");
     make_arp_answer_from_request(ethspi.txbuf, plen);
     return;
   }
-  return;
+
   // check if ip packets (icmp or udp) are for us:
-  if (eth_type_is_ip_and_my_ip(ethspi.rxbuf,plen)==0){
+  if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen) == 0) {
     return;
   }
 
@@ -72,16 +72,18 @@ static void __eth_spi_handle_pkt() {
     // TODO PETER
     memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
     make_echo_reply_from_request(ethspi.txbuf, plen);
-    print("ETH: pong\n");
+    DBG(D_ETH, D_DEBUG, "ethspi tx pong\n");
     return;
   }
 
   // we listen on port 1200=0x4B0
-  if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V &&
-      ethspi.rxbuf[UDP_DST_PORT_H_P] ==4  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xb0) {
-    int payloadlen = ethspi.rxbuf[UDP_LEN_L_P] - UDP_HEADER_LEN;
-    print("ETH: UDP len:%i\n", payloadlen);
-    printbuf(&ethspi.rxbuf[UDP_DATA_P], payloadlen);
+  if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
+      /*&& ethspi.rxbuf[UDP_DST_PORT_H_P] ==4  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xb0*/) {
+    int payloadlen = /*ethspi.rxbuf[UDP_LEN_L_P]*/plen - 34 - UDP_HEADER_LEN;
+    DBG(D_ETH, D_DEBUG, "ethspi UDP len:%i\n", payloadlen);
+    IF_DBG(D_ETH, D_DEBUG) {
+      printbuf(&ethspi.rxbuf[UDP_DATA_P], MIN(128, payloadlen));
+    }
     //char *nisse = "hello wurlde";
     //make_udp_reply_from_request(ethbuf, nisse, strlen(nisse), 1200);
 
@@ -112,7 +114,6 @@ void *ETH_SPI_thread_func(void *a) {
     while (ethspi.active &&
         ((eir = enc28j60Read(EIR)) &
             (EIR_PKTIF | EIR_RXERIF | EIR_DMAIF | EIR_LINKIF | EIR_TXIF | EIR_TXERIF | EIR_RXERIF))
-//|| TRUE
             ) {
       if (eir & EIR_RXERIF) {
         DBG(D_ETH, D_DEBUG, "ethspi clear RXERR interrupt\n");
@@ -137,11 +138,11 @@ void *ETH_SPI_thread_func(void *a) {
       //if (eir & EIR_PKTIF) { // not reliable
       if (enc28j60hasRxPkt()) {
         DBG(D_ETH, D_DEBUG, "ethspi packet\n");
-        __eth_spi_handle_pkt();
+        _eth_spi_handle_pkt();
       }
     }
 
-    // disable eth interrupts
+    // enable eth interrupts
     enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, EIE, EIE_INTIE);
 
   } // active
@@ -171,7 +172,7 @@ void ETH_SPI_start() {
   ethspi.stack = HEAP_malloc(0x404);
   OS_thread_create(
       &ethspi.thread,
-      0,
+      OS_THREAD_FLAG_PRIVILEGED,
       ETH_SPI_thread_func,
       NULL,
       (void *)ethspi.stack, 0x400,

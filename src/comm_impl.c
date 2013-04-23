@@ -403,6 +403,7 @@ void COMM_init(uart* u) {
       0,                    // comm_phy_rx_char - called from uart irq
       COMM_tx_char,         // comm_phy_tx_char
       COMM_tx_buf,          // comm_phy_tx_buf
+      0,                    // comm_phy_tx_flush
       COMM_get_tick_count,  // comm_app_get_time
       COMM_rx_pkt,          // comm_app_user_rx
       COMM_ack_pkt,         // comm_app_user_ack

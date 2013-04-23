@@ -15,6 +15,7 @@
 #include "led.h"
 #include "comm.h"
 #include "nvstorage.h"
+#include "comm_file.h"
 
 // enable not to hangup on alive ping/pong timeouts
 #define COMM_DBG_DONT_HANGUP
@@ -375,6 +376,7 @@ static void cnc_alive_timer_task(u32_t ignore, void *ignore_more) {
   } else {
     CNC_COMM_handle_comm_dead(res);
   }
+  COMM_FILE_watchdog();
 }
 
 static void cnc_sr_cb_task(u32_t sr, void *ignore) {

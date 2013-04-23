@@ -118,51 +118,34 @@ __attribute__((naked)) void __os_pendsv(void)  {
       "ldr     r2, __os\n"
       "ldr     r1, [r2, %0]\n"    // get os.current_flags
       "cbz     r1, __no_leave_context\n"
-      // ..store context
-      "tst     r1, #(1<<2)\n"     // is OS_THREAD_FLAG_PRIVILEGED set?
-      "beq     __store_thread_context\n"
-      // ....store main context
-      "push    {r4-r11}\n"
-      "mrs     r0, msp\n"
-      "b       __do_ctx_switch\n"
       // ....store thread context
-      "__store_thread_context:\n"
       "mrs     r0, psp\n"
       "stmdb   r0!, {r4-r11}\n"
       "msr     psp, r0\n"
-      "b       __do_ctx_switch\n"
-      // ..else store kernel main context
-      "__no_leave_context:\n"
-      "ldr     r1, [r2, %1]\n"    // get os.main_msp
-      "teq     r1, #0\n"          // if zero, first ctx switch ever
-      "ittt    eq\n"
-      "pusheq  {r4-r11}\n"
-      "mrseq   r0, msp\n"
-      "streq   r0, [r2, %1]\n"    // store os.main_msp
 
       // call __os_ctx_switch
       "__do_ctx_switch:\n"
       // takes r0 = current sp
+      "bl      __os_ctx_switch\n"
       // returns r0 = flags of new thread or 0
       //         r1 = new sp
-      "bl      __os_ctx_switch\n"
 
       // if got new thread
       "cbz     r0, __no_enter_context\n"
-      // ..restore context
+
+      // ..restore context, set user or privileged
+      "mrs     r2, CONTROL\n"
       "tst     r0, #(1<<2)\n"     // is OS_THREAD_FLAG_PRIVILEGED set?
-      "beq     __restore_thread_context\n"
-      // ....restore main context
-      "msr     msp, r1\n"
-      "pop     {r4-r11}\n"
-      "mvn     lr, #6\n"          // __MAIN_RETURN, priv thread
-      "bx      lr\n"
+      "ite     ne\n"
+      "andne   r2, #1\n"      // privileged
+      "orreq   r2, #1\n"      // user
+      "msr     CONTROL, r2\n"
       // ....restore thread context
-      "__restore_thread_context:\n"
       "ldmfd   r1!, {r4-r11}\n"
       "msr     psp, r1\n"
-      "mvn     lr, #2\n" // __THREAD_RETURN, norm thread
+      "mvn     lr, #2\n" // __THREAD_RETURN
       "bx      lr\n"
+
       // ..else if no new thread, get ass back to kernel main
       "__no_enter_context:\n"
       "ldr     r2, __os\n"
@@ -172,9 +155,18 @@ __attribute__((naked)) void __os_pendsv(void)  {
       "pop     {r4-r11}\n"
       "mvn     lr, #6\n" // __MAIN_RETURN, kernel
       "bx      lr\n"
+      // .. store kernel main context
+      "__no_leave_context:\n"
+      "ldr     r1, [r2, %1]\n"    // get os.main_msp
+      "teq     r1, #0\n"          // if zero, first ctx switch ever
+      "ittt    eq\n"
+      "pusheq  {r4-r11}\n"
+      "mrseq   r0, msp\n"
+      "streq   r0, [r2, %1]\n"    // store os.main_msp
+      "b       __do_ctx_switch\n"
+      ""
       "__os:"
       ".word   os"
-
       :
       : "n"(offsetof(struct os, current_flags)), "n"(offsetof(struct os, main_msp))
   );
@@ -212,6 +204,7 @@ u32_t __os_ctx_switch(void *sp) {
     os.current_flags = 0;
   }
   os.current_thread = cand;
+  asm volatile ("nop"); // compiler reorder barrier
   if (os.current_flags) {
     asm volatile (
         "mov    r1, %0\n"
@@ -220,6 +213,7 @@ u32_t __os_ctx_switch(void *sp) {
         : "r1"
     );
   }
+  asm volatile ("nop"); // compiler reorder barrier
   return os.current_flags;
 }
 
@@ -321,6 +315,10 @@ static void OS_exit_critical(bool pre) {
 
 // enter critical, disable interrupts
 inline void __os_enter_critical_kernel(void) {
+  if ((__get_CONTROL() & 3) == 3) {
+    // TODO PETER
+    print("enter critical from user!!\n");
+  }
   __disable_irq();
   g_crit_entry++;
 }
@@ -416,7 +414,7 @@ u32_t OS_thread_id(os_thread *t) {
 u32_t OS_thread_yield(void) {
   ASSERT(g_crit_entry == 0);
   OS_svc_1((void*)OS_SVC_YIELD,0,0,0);
-  return OS_thread_self()->ret_val;
+  return 0;// TODO PETER might hardfault on us, r3 corrupted??: OS_thread_self()->ret_val;
 }
 
 void OS_thread_join(os_thread *t) {
@@ -581,6 +579,8 @@ u32_t OS_cond_init(os_cond *c) {
 u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
   os_thread *self = OS_thread_self();
   u32_t r;
+  ASSERT((void*)c >= RAM_BEGIN);
+  ASSERT((void*)c < RAM_END);
   __os_enter_critical_kernel();
   (void)OS_mutex_unlock_internal(m);
   list_delete(&os.q_running, OS_ELEMENT(self));
@@ -689,13 +689,10 @@ void OS_init(void) {
   os.first_awake = OS_FOREVER;
 
 
-  NVIC_SetPriority(PendSV_IRQn, 0x3); // set PendSV to lowest level
-
   SysTick->LOAD  = (ticks & SysTick_LOAD_RELOAD_Msk) - 1; // set reload reg
   SysTick->VAL   = 0;
   SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk;
   SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);
-  NVIC_SetPriority(SysTick_IRQn, 0x3); // set Systick to lowest level
 }
 
 #if OS_DBG_MON

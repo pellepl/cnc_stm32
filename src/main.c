@@ -101,14 +101,19 @@ int main(void) {
 
   OS_init();
 
-#define KERNEL_STACK_EXTRA 0x400
+#define KERNEL_STACK_EXTRA 0x800
 
   print("Main thread stack size: %i bytes\n", __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA);
 
   DBG_init();
 
-  OS_thread_create(&main_thread, OS_THREAD_FLAG_PRIVILEGED, main_thread_func, 0,
-      (void *)(STACK_START+4), __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA, "main_kernel");
+  OS_thread_create(
+      &main_thread,
+      OS_THREAD_FLAG_PRIVILEGED,
+      main_thread_func,
+      0,
+      (void *)(STACK_START+4), __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA,
+      "main_kernel");
 
   while(1) {
     print("z");
@@ -157,11 +162,103 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
   stacked_pc = ((unsigned long) hardfault_args[6]);
   stacked_psr = ((unsigned long) hardfault_args[7]);
 
+  u32_t bfar = SCB->BFAR;
+  u32_t cfsr = SCB->CFSR;
+  u32_t hfsr = SCB->HFSR;
+  u32_t dfsr = SCB->DFSR;
+  u32_t afsr = SCB->AFSR;
+
   // Hijack the process stack pointer to make backtrace work
   asm("mrs %0, psp" : "=r"(HARDFAULT_PSP) : :);
   stack_pointer = HARDFAULT_PSP;
 
+  UART_sync_tx(_UART(STDOUT), TRUE);
+
   UART_tx_flush(_UART(STDOUT));
+
+  print("\n!!! HARDFAULT !!!\n\n");
+  print("Stacked registers:\n");
+  print("  pc:   0x%08x\n", stacked_pc);
+  print("  lr:   0x%08x\n", stacked_lr);
+  print("  psr:  0x%08x\n", stacked_psr);
+  print("  sp:   0x%08x\n", stack_pointer);
+  print("  r0:   0x%08x\n", stacked_r0);
+  print("  r1:   0x%08x\n", stacked_r1);
+  print("  r2:   0x%08x\n", stacked_r2);
+  print("  r3:   0x%08x\n", stacked_r3);
+  print("  r12:  0x%08x\n", stacked_r12);
+  print("\nFault status registers:\n");
+  print("  BFAR: 0x%08x\n", bfar);
+  print("  CFSR: 0x%08x\n", cfsr);
+  print("  HFSR: 0x%08x\n", hfsr);
+  print("  DFSR: 0x%08x\n", dfsr);
+  print("  AFSR: 0x%08x\n", afsr);
+  print("\n");
+  if (cfsr & (1<<(7+0))) {
+    print("MMARVALID: MemMan 0x%08x\n", SCB->MMFAR);
+  }
+  if (cfsr & (1<<(4+0))) {
+    print("MSTKERR: MemMan error during stacking\n");
+  }
+  if (cfsr & (1<<(3+0))) {
+    print("MUNSTKERR: MemMan error during unstacking\n");
+  }
+  if (cfsr & (1<<(1+0))) {
+    print("DACCVIOL: MemMan memory access violation, data\n");
+  }
+  if (cfsr & (1<<(0+0))) {
+    print("IACCVIOL: MemMan memory access violation, instr\n");
+  }
+
+  if (cfsr & (1<<(7+8))) {
+    print("BFARVALID: BusFlt 0x%08x\n", SCB->BFAR);
+  }
+  if (cfsr & (1<<(4+8))) {
+    print("STKERR: BusFlt error during stacking\n");
+  }
+  if (cfsr & (1<<(3+8))) {
+    print("UNSTKERR: BusFlt error during unstacking\n");
+  }
+  if (cfsr & (1<<(2+8))) {
+    print("IMPRECISERR: BusFlt error during data access\n");
+  }
+  if (cfsr & (1<<(1+8))) {
+    print("PRECISERR: BusFlt error during data access\n");
+  }
+  if (cfsr & (1<<(0+8))) {
+    print("IBUSERR: BusFlt bus error\n");
+  }
+
+  if (cfsr & (1<<(9+16))) {
+    print("DIVBYZERO: UsaFlt division by zero\n");
+  }
+  if (cfsr & (1<<(8+16))) {
+    print("UNALIGNED: UsaFlt unaligned access\n");
+  }
+  if (cfsr & (1<<(3+16))) {
+    print("NOCP: UsaFlt execute coprocessor instr\n");
+  }
+  if (cfsr & (1<<(2+16))) {
+    print("INVPC: UsaFlt general\n");
+  }
+  if (cfsr & (1<<(1+16))) {
+    print("INVSTATE: UsaFlt execute ARM instr\n");
+  }
+  if (cfsr & (1<<(0+16))) {
+    print("UNDEFINSTR: UsaFlt execute bad instr\n");
+  }
+
+  if (hfsr & (1<<31)) {
+    print("DEBUGEVF: HardFlt debug event\n");
+  }
+  if (hfsr & (1<<30)) {
+    print("FORCED: HardFlt SVC/BKPT within SVC\n");
+  }
+  if (hfsr & (1<<1)) {
+    print("VECTBL: HardFlt vector fetch failed\n");
+  }
+
+
   while(1);
 }
 #endif

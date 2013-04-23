@@ -47,7 +47,8 @@ typedef struct {
 #endif
   uart_rx_callback rx_f;
   void* arg;
-  u8_t assure_tx;
+  bool assure_tx;
+  bool sync_tx;
 #if UART_RECORD_IRQ_TYPE
   u32_t last_sr;
 #endif
@@ -72,7 +73,8 @@ extern uart __uart_vec[CONFIG_UART_CNT];
 
 void UART_irq(uart *uart);
 void UART_init();
-void UART_assure_tx(uart *u, u8_t on);
+void UART_assure_tx(uart *u, bool on);
+void UART_sync_tx(uart *u, bool on);
 void UART_set_callback(uart *uart, uart_rx_callback rx_f, void* arg);
 void UART_get_callback(uart *uart, uart_rx_callback *rx_f, void **arg);
 s32_t UART_get_char(uart *uart);

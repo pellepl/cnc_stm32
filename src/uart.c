@@ -52,19 +52,19 @@ void UART_irq(uart *u) {
     }
   }
   if ((UART_CHECK_TX(u->hw))) {
-#if UART_ALWAYS_SYNC_TX
-    USART_ITConfig(u->hw, USART_IT_TXE, DISABLE);
-#else
-    if (u->tx.wix != u->tx.rix) {
-      USART_SendData(u->hw, u->tx.buf[u->tx.rix++]);
-      if (u->tx.rix >= UART_TX_BUFFER) {
-        u->tx.rix = 0;
+    if (UART_ALWAYS_SYNC_TX || u->sync_tx) {
+      USART_ITConfig(u->hw, USART_IT_TXE, DISABLE);
+    } else {
+      if (u->tx.wix != u->tx.rix) {
+        USART_SendData(u->hw, u->tx.buf[u->tx.rix++]);
+        if (u->tx.rix >= UART_TX_BUFFER) {
+          u->tx.rix = 0;
+        }
+      }
+      if (u->tx.wix == u->tx.rix) {
+        UART_TX_IRQ_OFF(u);
       }
     }
-    if (u->tx.wix == u->tx.rix) {
-      UART_TX_IRQ_OFF(u);
-    }
-#endif
   }
   if (UART_CHECK_OR(u->hw)) {
     (void)USART_ReceiveData(u->hw);
@@ -157,28 +157,28 @@ s32_t UART_get_buf(uart *u, u8_t* dst, u16_t len) {
 }
 
 s32_t UART_put_char(uart *u, u8_t c) {
-#if UART_ALWAYS_SYNC_TX
-  while (UART_CHECK_TX(u->hw) == 0)
-    ;
-  USART_SendData(u->hw, (uint8_t) c);
-  return 0;
-#else
-  s32_t res;
-  do {
-    res = 0;
+  if (UART_ALWAYS_SYNC_TX || u->sync_tx) {
+    while (UART_CHECK_TX(u->hw) == 0)
+      ;
+    USART_SendData(u->hw, (uint8_t) c);
+    return 0;
+  } else {
+    s32_t res;
+    do {
+      res = 0;
 
-    if (UART_tx_available(u) > 0) {
-      u->tx.buf[u->tx.wix++] = c;
-      if (u->tx.wix >= UART_TX_BUFFER) {
-        u->tx.wix = 0;
+      if (UART_tx_available(u) > 0) {
+        u->tx.buf[u->tx.wix++] = c;
+        if (u->tx.wix >= UART_TX_BUFFER) {
+          u->tx.wix = 0;
+        }
+      } else {
+        res = -1;
       }
-    } else {
-      res = -1;
-    }
-    UART_TX_IRQ_ON(u);
-  } while (u->assure_tx && res != 0);
-  return res;
-#endif
+      UART_TX_IRQ_ON(u);
+    } while (u->assure_tx && res != 0);
+    return res;
+  }
 }
 
 void UART_tx_force_char(uart *u, u8_t c) {
@@ -188,45 +188,45 @@ void UART_tx_force_char(uart *u, u8_t c) {
 }
 
 s32_t UART_put_buf(uart *u, u8_t* c, u16_t len) {
-#if UART_ALWAYS_SYNC_TX
-  u16_t tlen = len;
-  while (tlen-- > 0) {
-    UART_put_char(u, *c++);
-  }
-  return len;
-#else
-  u32_t written = 0;
-  u16_t guard = 0;
-  do {
-    u16_t avail = UART_tx_available(u);
-    s32_t len_to_write = MIN(len - written, avail);
-    guard++;
-    if (len_to_write == 0) {
-      while (UART_CHECK_TX(u->hw) == 0)
-        ;
-      len_to_write = 1;
+  if (UART_ALWAYS_SYNC_TX || u->sync_tx) {
+    u16_t tlen = len;
+    while (tlen-- > 0) {
+      UART_put_char(u, *c++);
     }
-    guard = 0;
-    u32_t remaining = len_to_write;
-    u32_t len_to_end = UART_TX_BUFFER - u->tx.wix;
-    if (remaining > len_to_end) {
-      memcpy(&u->tx.buf[u->tx.wix], c, len_to_end);
-      c += len_to_end;
-      remaining -= len_to_end;
-      u->tx.wix = 0;
-    }
-    memcpy(&u->tx.buf[u->tx.wix], c, remaining);
-    c += remaining;
-    u->tx.wix += remaining;
-    if (u->tx.wix >= UART_RX_BUFFER) {
-      u->tx.wix = 0;
-    }
-    UART_TX_IRQ_ON(u);
-    written += len_to_write;
-  } while (u->assure_tx && written < len && guard < 0xff);
+    return len;
+  } else {
+    u32_t written = 0;
+    u16_t guard = 0;
+    do {
+      u16_t avail = UART_tx_available(u);
+      s32_t len_to_write = MIN(len - written, avail);
+      guard++;
+      if (len_to_write == 0) {
+        while (UART_CHECK_TX(u->hw) == 0)
+          ;
+        len_to_write = 1;
+      }
+      guard = 0;
+      u32_t remaining = len_to_write;
+      u32_t len_to_end = UART_TX_BUFFER - u->tx.wix;
+      if (remaining > len_to_end) {
+        memcpy(&u->tx.buf[u->tx.wix], c, len_to_end);
+        c += len_to_end;
+        remaining -= len_to_end;
+        u->tx.wix = 0;
+      }
+      memcpy(&u->tx.buf[u->tx.wix], c, remaining);
+      c += remaining;
+      u->tx.wix += remaining;
+      if (u->tx.wix >= UART_RX_BUFFER) {
+        u->tx.wix = 0;
+      }
+      UART_TX_IRQ_ON(u);
+      written += len_to_write;
+    } while (u->assure_tx && written < len && guard < 0xff);
 
-  return written;
-#endif
+    return written;
+  }
 }
 
 void UART_set_callback(uart *u, uart_rx_callback rx_f, void* arg) {
@@ -274,10 +274,13 @@ void UART_init() {
 }
 
 
-void UART_assure_tx(uart *u, u8_t on) {
+void UART_assure_tx(uart *u, bool on) {
   u->assure_tx = on;
 }
 
+void UART_sync_tx(uart *u, bool on) {
+  u->sync_tx = on;
+}
 
 #if UART_RECORD_IRQ_TYPE
 static void UART_record_irq(uart *u) {

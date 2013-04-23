@@ -367,12 +367,12 @@ void TASK_timer() {
 
   task_timer *old_timer = NULL;
   while (cur_timer && cur_timer->start_time <= SYS_get_time_ms()) {
+    __os_enter_critical_kernel();
     if (!TASK_is_running(cur_timer->task) && cur_timer->alive) {
       // expired, schedule for run
       TASK_run(cur_timer->task, cur_timer->arg, cur_timer->arg_p);
     }
     old_timer = cur_timer;
-    __os_enter_critical_kernel();
     cur_timer = cur_timer->_next;
     task_sys.first_timer = cur_timer;
     if (old_timer->recurrent_time && old_timer->alive) {

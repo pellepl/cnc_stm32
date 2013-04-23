@@ -114,6 +114,16 @@ static int f_ethregw(int reg, int data);
 static int f_read_nvram();
 static int f_wr_nvram(int a, int d);
 
+static int f_hardfault(int a) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdiv-by-zero"
+  SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+  volatile int q = 3;
+  volatile int x = 0;
+  return q/x;
+#pragma GCC diagnostic pop
+}
+
 #define USE_FSMC
 
 #ifndef USE_FSMC
@@ -880,10 +890,10 @@ static cmd c_tbl[] = {
     {.name = "ethinit",     .fn = (func)ETH_SPI_init,
         .help = "Initialize ENC28J60 spi eth device\n"
     },
-    {.name = "ethstart",     .fn = (func)ETH_SPI_start,
+    {.name = "ethup",     .fn = (func)ETH_SPI_start,
         .help = "Start eth thread\n"
     },
-    {.name = "ethstop",     .fn = (func)ETH_SPI_stop,
+    {.name = "ethdown",     .fn = (func)ETH_SPI_stop,
         .help = "Stop eth thread\n"
     },
     {.name = "ethdump",     .fn = (func)ETH_SPI_dump,
@@ -934,6 +944,9 @@ static cmd c_tbl[] = {
     },
     {.name = "reset_fwupgrade",  .fn = (func)f_reset_fw_upgrade,
         .help = "Resets system into bootloader for upgrade\n"
+    },
+    {.name = "hardfault",  .fn = (func)f_hardfault,
+        .help = "Generate hardfault, div by zero\n"
     },
     {.name = "help",  .fn = (func)f_help,
         .help = "Prints help\n"\

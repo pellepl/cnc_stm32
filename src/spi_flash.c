@@ -83,15 +83,15 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
     u32_t busy_res = sfd->tmp_buf[0] & (1<<sfd->flash_conf.busy_sr_bit);
     bool poll_exceed = sfd->poll_count > sfd->flash_conf.busy_poll_divisor;
     if (!poll_exceed && busy_res) {
-      DBG(D_SPI, D_INFO, "SPIF poll: still busy\n");
+      DBG(D_SPI, D_DEBUG, "SPIF poll: still busy\n");
       // still busy, return
       return;
     } else {
       // not busy any longer or timeout, continue state switching
       if (poll_exceed) {
-        DBG(D_SPI, D_INFO, "SPIF poll: poll count exceeded\n");
+        DBG(D_SPI, D_WARN, "SPIF poll: poll count exceeded\n");
       } else {
-        DBG(D_SPI, D_INFO, "SPIF poll: busy released\n");
+        DBG(D_SPI, D_DEBUG, "SPIF poll: busy released\n");
       }
       TASK_stop_timer(&sfd->timer);
       sfd->busy_poll = FALSE;
@@ -208,6 +208,7 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
 static void SPI_FLASH_callback_spi_result(spi_dev *dev, int res) {
   spi_flash_dev *sfd = (spi_flash_dev *)((char*)dev - offsetof(spi_flash_dev, dev));
   if (res != SPI_OK) {
+    DBG(D_SPI, D_WARN, "SPIF cb err i\n", res);
     if (sfd->busy_poll) {
       TASK_stop_timer(&sfd->timer);
       sfd->busy_poll = FALSE;
@@ -234,7 +235,7 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
     // busy poll, fire off an SR read
 
     sfd->poll_count++;
-    DBG(D_SPI, D_INFO, "SPIF poll: SR busy %i/%i?\n", sfd->poll_count, sfd->flash_conf.busy_poll_divisor);
+    DBG(D_SPI, D_DEBUG, "SPIF poll: SR busy %i/%i?\n", sfd->poll_count, sfd->flash_conf.busy_poll_divisor);
     seq.tx = (u8_t*)&sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_READ_SR];
     seq.tx_len = 1;
     seq.rx = sfd->tmp_buf;
@@ -244,7 +245,7 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
     if (res == SPI_ERR_DEV_BUSY && sfd->poll_count < 16) {
       DBG(D_SPI, D_INFO, "SPIF poll: device busy\n");
     } else if (res != SPI_OK) {
-      DBG(D_SPI, D_INFO, "SPIF poll: ERROR %i\n", res);
+      DBG(D_SPI, D_WARN, "SPIF poll: ERROR %i\n", res);
       TASK_stop_timer(&sfd->timer);
       sfd->busy_poll = FALSE;
 
@@ -626,7 +627,8 @@ int SPI_FLASH_init(spi_flash_dev *sfd, spi_flash_dev_conf *flash_conf, u16_t spi
     spi_bus *bus, hw_io_port cs_port, hw_io_pin cs_pin) {
   memset(sfd, 0, sizeof(spi_flash_dev));
   memcpy(&sfd->flash_conf, flash_conf, sizeof(spi_flash_dev_conf));
-  SPI_DEV_init(&sfd->dev, spi_conf, bus, cs_port, cs_pin, 0);
+  //SPI_DEV_init(&sfd->dev, spi_conf, bus, cs_port, cs_pin, 0);
+  SPI_DEV_init(&sfd->dev, spi_conf, bus, cs_port, cs_pin, SPI_CONF_IRQ_DRIVEN);
   SPI_DEV_set_callback(&sfd->dev, SPI_FLASH_callback_spi_result);
   sfd->task = TASK_create(SPI_FLASH_task_f, TASK_STATIC);
   sfd->state = SPI_FLASH_STATE_CLOSED;

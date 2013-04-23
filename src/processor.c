@@ -63,9 +63,61 @@ static void NVIC_config(void)
 {
   NVIC_InitTypeDef NVIC_InitStructure;
 
-  /* Configure the NVIC Preemption Priority Bits */
-  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
+  // Configure the NVIC Preemption Priority Bits
+  u8_t prioGrp = __NVIC_PRIO_BITS+1;
+  NVIC_SetPriorityGrouping(prioGrp);
 
+  // Config & enable TIM2 interrupt
+  NVIC_SetPriority(TIM2_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
+  NVIC_EnableIRQ(TIM2_IRQn);
+  // Config & enable systick interrupt, highest
+  NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(prioGrp, 0, 1));
+  NVIC_EnableIRQ(SysTick_IRQn);
+  // Config & enable pendsv interrupt, lowest
+  NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
+  NVIC_EnableIRQ(PendSV_IRQn);
+
+  // Config & enable uarts interrupt, lowest
+#ifdef CONFIG_UART1
+  NVIC_SetPriority(USART1_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_EnableIRQ(USART1_IRQn);
+#endif
+#ifdef CONFIG_UART2
+  NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_EnableIRQ(USART2_IRQn);
+#endif
+#ifdef CONFIG_UART3
+  NVIC_SetPriority(USART3_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_EnableIRQ(USART3_IRQn);
+#endif
+#ifdef CONFIG_UART4
+  NVIC_SetPriority(UART4_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_EnableIRQ(UART4_IRQn);
+#endif
+
+#ifdef CONFIG_SPI
+  // Config & enable the SPI-DMA interrupt
+  NVIC_SetPriority(SPI_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 2, 0));
+  NVIC_EnableIRQ(SPI_MASTER_Rx_IRQ_Channel);
+  NVIC_SetPriority(SPI_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 2, 1));
+  NVIC_EnableIRQ(SPI_MASTER_Tx_IRQ_Channel);
+
+#ifdef CONFIG_ETHSPI
+  // Config & enable the enc28j60 rx interrupt
+  NVIC_SetPriority(SPI_ETH_INT_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 3, 0));
+  NVIC_EnableIRQ(SPI_ETH_INT_EXTI_IRQn);
+#endif
+#endif
+
+  // Config & enable the dump button interrupt
+#if OS_DBG_MON
+  NVIC_SetPriority(OS_DUMP_IRQ_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 6, 0));
+  NVIC_EnableIRQ(OS_DUMP_IRQ_EXTI_IRQn);
+#endif
+
+
+
+#if 0
   /* Enable the TIM2 global Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
@@ -135,6 +187,8 @@ static void NVIC_config(void)
 #endif
 
 #endif
+#endif
+
 }
 
 static void UART1_config() {

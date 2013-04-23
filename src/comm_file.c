@@ -62,6 +62,8 @@ static struct {
   u8_t buf[COMM_APP_MAX_DATA]; //COMM_FILE_MAX_DATA_PKT preferred, but compiler thinks offsetof is variable
   // file meta data struct
   fw_upgrade_info fw_info;
+
+  u8_t watchdog;
 } state;
 
 static void _comm_file_spif_cb_abort(u8_t err) {
@@ -127,7 +129,7 @@ static void _comm_file_spif_cb(spi_flash_dev *dev, int result) {
       state.media_crc = crc_ccitt_16(state.media_crc, state.buf[i]);
     }
     if (state.rx_crc != state.media_crc) {
-      DBG(D_SYS, D_WARN, "COMMFILE spi ERR CRC differ rx: %04 rd: %04 ix: %08x\n", state.rx_crc, state.media_crc, state.index);
+      DBG(D_SYS, D_WARN, "COMMFILE spi ERR CRC differ rx: %04x rd: %04x ix: %08x\n", state.rx_crc, state.media_crc, state.index);
       _comm_file_spif_cb_abort(COMM_FILE_ERR_CRC_ERR);
       return;
     }
@@ -235,6 +237,7 @@ s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len) {
     state.errors = 0;
     state.rx_crc = 0xffff;
     state.media_crc = 0xffff;
+    state.watchdog = 0;
 
     state.fw_info.crc = h->crc;
     state.fw_info.len = h->length;
@@ -275,6 +278,8 @@ s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len) {
       COMM_reply(&reply, 1);
       return R_COMM_OK;
     }
+
+    state.watchdog = 0;
 
     reply = COMM_FILE_REPLY_OK;
     COMM_reply(&reply, 1);
@@ -341,6 +346,13 @@ s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len) {
     COMM_tx(COMM_CONTROLLER_ADDRESS, (u8_t*)&a, sizeof(comm_file_ack), TRUE);
   }
   return res;
+}
+
+void COMM_FILE_watchdog() {
+  if (state.active && state.watchdog++ > 5) {
+    DBG(D_SYS, D_WARN, "COMMFILE ERR WATCHDOG reset\n");
+    COMM_FILE_init();
+  }
 }
 
 void COMM_FILE_init() {
