@@ -12,7 +12,6 @@
 #include "stm32f10x.h"
 
 
-
 #define APP_NAME "CNC control"
 
 
@@ -49,6 +48,17 @@
 /***** Hardware build time configuration *****/
 /*********************************************/
 
+/** Processor specifics **/
+
+#ifndef USER_HARDFAULT
+// enable user hardfault handler
+#define USER_HARDFAULT 1
+#endif
+
+// hardware debug (blinking leds etc)
+#define HW_DEBUG
+
+
 /** General **/
 
 // internal flash start address
@@ -69,13 +79,6 @@
 #define FIRMWARE_SPIF_ADDRESS_META (FIRMWARE_SPIF_ADDRESS_BASE)
 #define FIRMWARE_SPIF_ADDRESS_DATA (FIRMWARE_SPIF_ADDRESS_BASE + sizeof(fw_upgrade_info))
 
-#ifndef USER_HARDFAULT
-// enable user hardfault handler
-#define USER_HARDFAULT 1
-#endif
-
-// hardware debug (blinking leds etc)
-#define HW_DEBUG
 
 typedef GPIO_TypeDef * hw_io_port;
 typedef uint16_t hw_io_pin;
@@ -235,36 +238,6 @@ typedef uint16_t hw_io_pin;
 /******** Application build time configuration ******/
 /****************************************************/
 
-/** OS **/
-
-// Enable stack boundary checks
-#define OS_STACK_CHECK        1
-// Enable stack usage checks
-#define OS_STACK_USAGE_CHECK  1
-// Enable os debug functionality
-#define OS_DBG_MON            1
-#if OS_DBG_MON
-// Max thread peer elements
-#define OS_THREAD_PEERS       8
-// Max mutex peer elements
-#define OS_MUTEX_PEERS        32
-// Max cond peer elements
-#define OS_COND_PEERS         16
-
-// Enable os dump by external interrupt
-#define OS_DUMP_IRQ
-
-#ifdef OS_DUMP_IRQ
-#define OS_DUMP_IRQ_GPIO_PORT         GPIOE
-#define OS_DUMP_IRQ_GPIO_PIN          GPIO_Pin_2
-#define OS_DUMP_IRQ_GPIO_PORT_SOURCE  GPIO_PortSourceGPIOE
-#define OS_DUMP_IRQ_GPIO_PIN_SOURCE   GPIO_PinSource2
-#define OS_DUMP_IRQ_EXTI_LINE         EXTI_Line2
-#define OS_DUMP_IRQ_EXTI_IRQn         EXTI2_IRQn
-#endif
-
-#endif
-
 /** TICKER **/
 
 // timer frequency
@@ -320,99 +293,14 @@ typedef uint16_t hw_io_pin;
 // disable all debug output
 //#define DBG_OFF
 
-#ifndef DBG_OFF
+// enable debug monitor for os
+#define OS_DBG_MON            1
 
-#define DBG_TIMESTAMP_PREFIX   1
-#define DBG_LEVEL_PREFIX       0
+// enable stack boundary checks
+#define OS_STACK_CHECK        1
 
-#define _DBG_BIT_NAMES { \
-  "sys",\
-  "app",\
-  "task",\
-  "os",\
-  "heap",\
-  "comm",\
-  "console",\
-  "nvs", \
-  "spi", \
-  "eth", \
-}
+// enable stack usage checks
+#define OS_STACK_USAGE_CHECK  1
 
-#ifdef DBG_SYS_OFF
-#define D_SYS     0
-#else
-#define D_SYS     (1<<0)
-#endif
-#ifdef DBG_APP_OFF
-#define D_APP     0
-#else
-#define D_APP     (1<<1)
-#endif
-#ifdef DBG_TASK_OFF
-#define D_TASK    0
-#else
-#define D_TASK    (1<<2)
-#endif
-#ifdef DBG_OS_OFF
-#define D_OS      0
-#else
-#define D_OS      (1<<3)
-#endif
-#ifdef DBG_HEAP_OFF
-#define D_HEAP    0
-#else
-#define D_HEAP    (1<<4)
-#endif
-#ifdef DBG_COMM_OFF
-#define D_COMM    0
-#else
-#define D_COMM    (1<<5)
-#endif
-#ifdef DBG_CONSOLE_OFF
-#define D_CONSOLE 0
-#else
-#define D_CONSOLE (1<<6)
-#endif
-#ifdef DBG_NVS_OFF
-#define D_NVS     0
-#else
-#define D_NVS     (1<<7)
-#endif
-#ifdef DBG_SPI_OFF
-#define D_SPI     0
-#else
-#define D_SPI     (1<<8)
-#endif
-#ifdef DBG_ETH_OFF
-#define D_ETH     0
-#else
-#define D_ETH     (1<<9)
-#endif
-#ifdef DBG_ANY_OFF
-#define D_ANY     0
-#else
-#define D_ANY     (0xffffffff)
-#endif
-
-#else // DBG_OFF
-
-#define D_SYS     0
-#define D_APP     0
-#define D_TASK    0
-#define D_OS      0
-#define D_HEAP    0
-#define D_COMM    0
-#define D_CONSOLE 0
-#define D_NVS     0
-#define D_SPI     0
-#define D_ETH     0
-#define D_ANY     0
-
-#endif  // DBG_OFF
-
-#define D_DEBUG   0
-#define D_INFO    1
-#define D_WARN    2
-#define D_FATAL   3
 
 #endif /* SYSTEM_CONFIG_H_ */

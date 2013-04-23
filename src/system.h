@@ -9,6 +9,7 @@
 #define SYSTEM_H_
 
 #include "system_config.h"
+#include "system_debug.h"
 #include "stm32f10x.h"
 #include "types.h"
 
@@ -35,32 +36,6 @@ do { \
 } while (0);
 #endif
 
-// want to keep DBG as macro giving compiler opportunity to optimize away all
-// occurrences of DBG masks being 0
-#if DBG_LEVEL_PREFIX
-extern const char* __dbg_level_str[4];
-#define DBG_LEVEL_PRINT print("%s ", __dbg_level_str[level])
-#else
-#define DBG_LEVEL_PRINT
-#endif
-
-#ifdef DBG_OFF
-#define DBG(mask, level, f, ...) do {} while(0);
-#define IF_DBG(mask, level) while (0)
-#else
-#define DBG(mask, level, f, ...) do { \
-     if (((mask) & __dbg_mask) && level >= __dbg_level) { \
-       if (DBG_TIMESTAMP_PREFIX) { \
-         u8_t __hh; u8_t __mm; u8_t __ss; u16_t __mil; \
-         SYS_get_time(NULL, &__hh, &__mm, &__ss, &__mil); \
-         print("%02i:%02i:%02i.%03i ", __hh, __mm, __ss, __mil); \
-       } \
-       if (DBG_LEVEL_PREFIX) DBG_LEVEL_PRINT; \
-       print((f), ## __VA_ARGS__); \
-     } \
-  } while (0)
-#define IF_DBG(mask, level) if (((mask) & __dbg_mask) && level >= __dbg_level)
-#endif
 /**
  * Called at startup
  */

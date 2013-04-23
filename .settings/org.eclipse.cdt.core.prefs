@@ -1,6 +1,3 @@
 eclipse.preferences.version=1
-environment/project/cdt.managedbuild.toolchain.gnu.cross.base.439374112/STM32F10X_XL/delimiter=\:
-environment/project/cdt.managedbuild.toolchain.gnu.cross.base.439374112/STM32F10X_XL/operation=remove
-environment/project/cdt.managedbuild.toolchain.gnu.cross.base.439374112/STM32F10X_XL/value=1
 environment/project/cdt.managedbuild.toolchain.gnu.cross.base.439374112/append=true
 environment/project/cdt.managedbuild.toolchain.gnu.cross.base.439374112/appendContributed=true

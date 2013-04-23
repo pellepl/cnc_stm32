@@ -61,63 +61,71 @@ static void RCC_config() {
 
 static void NVIC_config(void)
 {
-  NVIC_InitTypeDef NVIC_InitStructure;
-
+#if 1
   // Configure the NVIC Preemption Priority Bits
-  u8_t prioGrp = __NVIC_PRIO_BITS+1;
+  // use 3 bits for preemption and 1 bit for  subgroup
+  u8_t prioGrp = 8 - __NVIC_PRIO_BITS;
+  // use 4 bits for preemption and 0 subgroups
+  //u8_t prioGrp = 8 - __NVIC_PRIO_BITS - 1;
   NVIC_SetPriorityGrouping(prioGrp);
+
+
+  // Config systick interrupt, highest
+  NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+
+  // Config pendsv interrupt, lowest
+  NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
 
   // Config & enable TIM2 interrupt
   NVIC_SetPriority(TIM2_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
   NVIC_EnableIRQ(TIM2_IRQn);
-  // Config & enable systick interrupt, highest
-  NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(prioGrp, 0, 1));
-  NVIC_EnableIRQ(SysTick_IRQn);
-  // Config & enable pendsv interrupt, lowest
-  NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
-  NVIC_EnableIRQ(PendSV_IRQn);
 
-  // Config & enable uarts interrupt, lowest
+  // Config & enable uarts interrupt
 #ifdef CONFIG_UART1
-  NVIC_SetPriority(USART1_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_SetPriority(USART1_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
   NVIC_EnableIRQ(USART1_IRQn);
 #endif
 #ifdef CONFIG_UART2
-  NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
   NVIC_EnableIRQ(USART2_IRQn);
 #endif
 #ifdef CONFIG_UART3
-  NVIC_SetPriority(USART3_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_SetPriority(USART3_IRQn, NVIC_EncodePriority(prioGrp, 2, 1));
   NVIC_EnableIRQ(USART3_IRQn);
 #endif
 #ifdef CONFIG_UART4
-  NVIC_SetPriority(UART4_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_SetPriority(UART4_IRQn, NVIC_EncodePriority(prioGrp, 2, 1));
   NVIC_EnableIRQ(UART4_IRQn);
 #endif
 
 #ifdef CONFIG_SPI
   // Config & enable the SPI-DMA interrupt
-  NVIC_SetPriority(SPI_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 2, 0));
+  NVIC_SetPriority(SPI_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 0));
   NVIC_EnableIRQ(SPI_MASTER_Rx_IRQ_Channel);
-  NVIC_SetPriority(SPI_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 2, 1));
+  NVIC_SetPriority(SPI_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
   NVIC_EnableIRQ(SPI_MASTER_Tx_IRQ_Channel);
 
 #ifdef CONFIG_ETHSPI
   // Config & enable the enc28j60 rx interrupt
-  NVIC_SetPriority(SPI_ETH_INT_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 3, 0));
+  NVIC_SetPriority(SPI_ETH_INT_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 4, 0));
   NVIC_EnableIRQ(SPI_ETH_INT_EXTI_IRQn);
 #endif
 #endif
 
-  // Config & enable the dump button interrupt
 #if OS_DBG_MON
+  // Config & enable the dump button interrupt
   NVIC_SetPriority(OS_DUMP_IRQ_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 6, 0));
   NVIC_EnableIRQ(OS_DUMP_IRQ_EXTI_IRQn);
 #endif
 
 
 
-#if 0
+#else
+
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
+
   /* Enable the TIM2 global Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
@@ -125,35 +133,48 @@ static void NVIC_config(void)
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 
+  NVIC_InitStructure.NVIC_IRQChannel = SysTick_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+  NVIC_InitStructure.NVIC_IRQChannel = PendSV_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 7;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+
 #ifdef CONFIG_UART1
   /* Enable the USART1 Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 #endif
 #ifdef CONFIG_UART2
   /* Enable the USART2 Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 #endif
 #ifdef CONFIG_UART3
   /* Enable the USART3 Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 #endif
 #ifdef CONFIG_UART4
   /* Enable the USART4 Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = UART4_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 4;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 #endif
@@ -161,8 +182,8 @@ static void NVIC_config(void)
 #ifdef CONFIG_SPI
   /* Enable the SPI-DMA Interrupt */
   NVIC_InitStructure.NVIC_IRQChannel = SPI_MASTER_Rx_IRQ_Channel;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
   NVIC_InitStructure.NVIC_IRQChannel = SPI_MASTER_Tx_IRQ_Channel;
@@ -170,23 +191,24 @@ static void NVIC_config(void)
 
 #ifdef CONFIG_ETHSPI
   NVIC_InitStructure.NVIC_IRQChannel = SPI_ETH_INT_EXTI_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x0F;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x0F;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-
-#if OS_DBG_MON
-#ifdef CONFIG_ETHSPI
-  NVIC_InitStructure.NVIC_IRQChannel = OS_DUMP_IRQ_EXTI_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 #endif
 #endif
 
+#if OS_DBG_MON
+  NVIC_InitStructure.NVIC_IRQChannel = OS_DUMP_IRQ_EXTI_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 6;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
 #endif
+
+
+
+
 #endif
 
 }

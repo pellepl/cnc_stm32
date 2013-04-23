@@ -688,7 +688,6 @@ void OS_init(void) {
   list_init(&os.q_sleep);
   os.first_awake = OS_FOREVER;
 
-
   SysTick->LOAD  = (ticks & SysTick_LOAD_RELOAD_Msk) - 1; // set reload reg
   SysTick->VAL   = 0;
   SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk;
