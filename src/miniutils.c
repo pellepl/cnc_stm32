@@ -140,6 +140,24 @@ void print(const char* f, ...) {
   va_end(arg_p);
 }
 
+void printbuf(u8_t *buf, u16_t len) {
+  int i = 0, ix = 0;
+  while (i < len) {
+    for (i = ix; i < MIN(ix+32, len); i++) {
+      print("%02x ", buf[i]);
+    }
+    while (i++ < 32) {
+      print("   ");
+    }
+    print ("  ");
+    for (i = ix; i < MIN(ix+32, len); i++) {
+      print("%c", buf[i] < 32 ? '.' : buf[i]);
+    }
+    ix += 32;
+    print("\n");
+  }
+}
+
 void vprint(const char* f, va_list arg_p) {
   v_printf(STDOUT, f, arg_p);
 }

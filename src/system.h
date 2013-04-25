@@ -25,17 +25,6 @@ enum reboot_reason_e {
 
 #include "shared_mem.h"
 
-#ifdef ASSERT_OFF
-#define ASSERT(x) do {} while(0);
-#else
-#define ASSERT(x) \
-do { \
-  if (!(x)) {\
-    SYS_assert(__FILE__, __LINE__);\
-  }\
-} while (0);
-#endif
-
 /**
  * Called at startup
  */
@@ -63,12 +52,6 @@ void SYS_set_time(u16_t d, u8_t h, u8_t m, u8_t s, u16_t ms);
 
 void SYS_assert(const char* file, int line);
 void SYS_hardsleep_ms(u32_t ms);
-void SYS_dbg_mask_set(u32_t mask);
-void SYS_dbg_mask_enable(u32_t mask);
-void SYS_dbg_mask_disable(u32_t mask);
-void SYS_dbg_level(u32_t level);
-u32_t SYS_dbg_get_mask();
-u32_t SYS_dbg_get_level();
 u32_t SYS_build_number();
 u32_t SYS_build_date();
 void SYS_reboot(enum reboot_reason_e);
@@ -85,8 +68,5 @@ extern int _sqrt(int);
 #define GPIO_disable(port, pin) (port)->BSRR = ((pin)<<16)
 #define GPIO_set(port, pin_ena, pin_dis) (port)->BSRR = (pin_ena) | ((pin_dis)<<16)
 #define GPIO_read(port, pin) (((port)->IDR & (pin)) != 0)
-
-extern volatile u32_t __dbg_mask;
-extern volatile u32_t __dbg_level;
 
 #endif /* SYSTEM_H_ */

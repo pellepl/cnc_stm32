@@ -15,30 +15,23 @@ u8_t ip[4] = {192,168,0,150};
 spi_dev_gen _enc28j60_spi_dev;
 
 static struct {
-  volatile bool rx_packet;
-  os_cond rx_cond;
-  os_mutex rx_mutex;
+  volatile bool irq_pending;
+  volatile bool active;
+
+  os_cond irq_cond;
+  os_mutex irq_mutex;
+  os_cond tx_cond;
+  os_mutex tx_mutex;
   u8_t rxbuf[512];
   u8_t txbuf[512];
-  volatile bool active;
-  volatile void *stack;
-  os_thread thread;
-} ethspi;
+  volatile void *rx_stack;
+  os_thread irq_thread;
 
-static void printbuf(u8_t *buf, u16_t len) {
-  int i = 0, ix = 0;
-  while (i < len) {
-    for (i = ix; i < MIN(ix+32, len); i++) {
-      print("%02x ", buf[i]);
-    }
-    print ("  ");
-    for (i = ix; i < MIN(ix+32, len); i++) {
-      print("%c", buf[i] < 32 ? '.' : buf[i]);
-    }
-    ix += 32;
-    print("\n");
-  }
-}
+  bool rx_pkt_available;
+  bool tx_pkt_free;
+  bool rx_error;
+  bool tx_error;
+} ethspi;
 
 static void _eth_spi_handle_pkt() {
   u16_t rx_stat;
@@ -54,9 +47,7 @@ static void _eth_spi_handle_pkt() {
   // verify the mac address by sending it to
   // a unicast address.
   if (eth_type_is_arp_and_my_ip(ethspi.rxbuf, plen)) {
-    // TODO PETER
     memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
-    DBG(D_ETH, D_DEBUG, "ethspi tx arp\n");
     make_arp_answer_from_request(ethspi.txbuf, plen);
     return;
   }
@@ -69,10 +60,8 @@ static void _eth_spi_handle_pkt() {
   if (ethspi.rxbuf[IP_PROTO_P]==IP_PROTO_ICMP_V &&
       ethspi.rxbuf[ICMP_TYPE_P]==ICMP_TYPE_ECHOREQUEST_V){
     // a ping packet, let's send pong
-    // TODO PETER
     memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
     make_echo_reply_from_request(ethspi.txbuf, plen);
-    DBG(D_ETH, D_DEBUG, "ethspi tx pong\n");
     return;
   }
 
@@ -91,53 +80,60 @@ static void _eth_spi_handle_pkt() {
   }
 }
 
-void *ETH_SPI_thread_func(void *a) {
-  DBG(D_ETH, D_INFO, "ethspi thread started\n");
+void *ETH_SPI_irq_thread_handler(void *a) {
+  DBG(D_ETH, D_INFO, "ethspi irq thread started\n");
+
   while (ethspi.active) {
-    if (enc28j60hasRxPkt()) {
-      ethspi.rx_packet = TRUE;
-    } else {
-      OS_mutex_lock(&ethspi.rx_mutex);
-      DBG(D_ETH, D_DEBUG, "ethspi await rx\n");
-//      while (ethspi.active && !ethspi.rx_packet) {
-        OS_cond_wait(&ethspi.rx_cond, &ethspi.rx_mutex);
-//      }
-      ethspi.rx_packet = FALSE;
-      OS_mutex_unlock(&ethspi.rx_mutex);
-      DBG(D_ETH, D_DEBUG, "ethspi release rx\n");
+    // await interrupt
+    if (!enc28j60hasRxPkt()) {
+      OS_mutex_lock(&ethspi.irq_mutex);
+      while (ethspi.active && !ethspi.irq_pending) {
+        OS_cond_wait(&ethspi.irq_cond, &ethspi.irq_mutex);
+      }
+      ethspi.irq_pending = FALSE;
+      OS_mutex_unlock(&ethspi.irq_mutex);
     }
+
+    asm volatile ("nop\n"); // compile barrier
 
     // disable eth interrupts
     enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIE, EIE_INTIE);
 
+    // check & clear interrupts
     u8_t eir = 0;
-    while (ethspi.active &&
+    bool rx_pkt;
+    while (ethspi.active && (
         ((eir = enc28j60Read(EIR)) &
             (EIR_PKTIF | EIR_RXERIF | EIR_DMAIF | EIR_LINKIF | EIR_TXIF | EIR_TXERIF | EIR_RXERIF))
-            ) {
+            | (rx_pkt = enc28j60hasRxPkt())
+            )) {
       if (eir & EIR_RXERIF) {
-        DBG(D_ETH, D_DEBUG, "ethspi clear RXERR interrupt\n");
+        DBG(D_ETH, D_WARN, "ethspi RXERR interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_RXERIF);
+        ethspi.rx_error = TRUE;
       }
       if (eir & EIR_TXERIF) {
-        DBG(D_ETH, D_DEBUG, "ethspi clear TXERR interrupt\n");
+        DBG(D_ETH, D_WARN, "ethspi TXERR interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
+        ethspi.tx_error = TRUE;
       }
       if (eir & EIR_TXIF) {
-        DBG(D_ETH, D_DEBUG, "ethspi clear TX interrupt\n");
+        DBG(D_ETH, D_DEBUG, "ethspi TX interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
+        ethspi.tx_pkt_free = TRUE;
       }
       if (eir & EIR_DMAIF) {
-        DBG(D_ETH, D_DEBUG, "ethspi clear DMA interrupt\n");
+        DBG(D_ETH, D_DEBUG, "ethspi DMA interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_DMAIF);
       }
       if (eir & EIR_LINKIF) {
-        DBG(D_ETH, D_DEBUG, "ethspi clear LINK interrupt\n");
+        DBG(D_ETH, D_DEBUG, "ethspi LINK interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_LINKIF);
       }
       //if (eir & EIR_PKTIF) { // not reliable
-      if (enc28j60hasRxPkt()) {
-        DBG(D_ETH, D_DEBUG, "ethspi packet\n");
+      if (rx_pkt) {
+        DBG(D_ETH, D_DEBUG, "ethspi PKT interrupt\n");
+        // handle directly
         _eth_spi_handle_pkt();
       }
     }
@@ -145,10 +141,21 @@ void *ETH_SPI_thread_func(void *a) {
     // enable eth interrupts
     enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, EIE, EIE_INTIE);
 
+    if (ethspi.rx_error) {
+      ethspi.rx_error = FALSE;
+    }
+    if (ethspi.tx_error) {
+      ethspi.tx_error = FALSE;
+    }
+    if (ethspi.tx_pkt_free) {
+      OS_mutex_lock(&ethspi.tx_mutex);
+      OS_cond_signal(&ethspi.tx_cond);
+      OS_mutex_unlock(&ethspi.tx_mutex);
+    }
   } // active
   DBG(D_ETH, D_INFO, "ethspi thread ended\n");
-  HEAP_free((void *)ethspi.stack);
-  ethspi.stack = NULL;
+  HEAP_free((void *)ethspi.rx_stack);
+  ethspi.rx_stack = NULL;
   return NULL;
 }
 
@@ -157,39 +164,43 @@ void ETH_SPI_irq() {
     EXTI_ClearITPendingBit(SPI_ETH_INT_EXTI_LINE);
     //DBG(D_ETH, D_DEBUG, "ethspi irq\n");
     if (ethspi.active) {
-      ethspi.rx_packet = TRUE;
-      OS_cond_signal(&ethspi.rx_cond);
+      ethspi.irq_pending = TRUE;
+      OS_cond_signal(&ethspi.irq_cond);
     }
   }
 }
 
 void ETH_SPI_start() {
-  if (ethspi.stack) {
+  if (ethspi.rx_stack) {
     DBG(D_ETH, D_WARN, "ethspi thread already running\n");
     return;
   }
   ethspi.active = TRUE;
-  ethspi.stack = HEAP_malloc(0x404);
+  ethspi.rx_stack = HEAP_malloc(0x404);
   OS_thread_create(
-      &ethspi.thread,
+      &ethspi.irq_thread,
       OS_THREAD_FLAG_PRIVILEGED,
-      ETH_SPI_thread_func,
+      ETH_SPI_irq_thread_handler,
       NULL,
-      (void *)ethspi.stack, 0x400,
+      (void *)ethspi.rx_stack, 0x400,
       "ethspi");
 }
 
 void ETH_SPI_stop() {
-  OS_mutex_lock(&ethspi.rx_mutex);
+  OS_mutex_lock(&ethspi.irq_mutex);
   ethspi.active = FALSE;
-  OS_cond_signal(&ethspi.rx_cond);
-  OS_mutex_unlock(&ethspi.rx_mutex);
+  OS_cond_signal(&ethspi.irq_cond);
+  OS_mutex_unlock(&ethspi.irq_mutex);
 }
 
 void ETH_SPI_init() {
   memset(&ethspi, 0, sizeof(ethspi));
-  OS_mutex_init(&ethspi.rx_mutex, OS_MUTEX_ATTR_CRITICAL_IRQ);
-  OS_cond_init(&ethspi.rx_cond);
+
+  ethspi.tx_pkt_free = TRUE;
+  OS_mutex_init(&ethspi.irq_mutex, OS_MUTEX_ATTR_CRITICAL_IRQ);
+  OS_cond_init(&ethspi.irq_cond);
+  OS_mutex_init(&ethspi.tx_mutex, 0);
+  OS_cond_init(&ethspi.tx_cond);
 
   DBG(D_ETH, D_DEBUG, "ethspi spigen init\n");
   SPI_DEV_GEN_init(
@@ -203,7 +214,7 @@ void ETH_SPI_init() {
   DBG(D_ETH, D_DEBUG, "ethspi spigen open\n");
   SPI_DEV_GEN_open(&_enc28j60_spi_dev);
   DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init\n");
-  enc28j60Init(mac);
+  enc28j60Init(mac, EIE_PKTIE | EIE_TXIE | EIE_RXERIE | EIE_TXERIE);
 
   DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init done, chip rev %02x\n", enc28j60getrev());
   DBG(D_ETH, D_DEBUG, "ethspi mac readback: %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -222,13 +233,15 @@ void ETH_SPI_init() {
 void ETH_SPI_dump() {
   print("ETH SPI\n-------\n");
   print("State\n");
-  print("  active:         %i\n", ethspi.active);
-  print("  rx_packet flag: %i\n", ethspi.rx_packet);
+  print("  active:   %i\n", ethspi.active);
+  print("  irq flag: %i\n", ethspi.irq_pending);
 #if OS_DBG_MON
   print("OS\n");
-  OS_DBG_print_thread(&ethspi.thread, TRUE, 2);
-  OS_DBG_print_mutex(&ethspi.rx_mutex, TRUE, 2);
-  OS_DBG_print_cond(&ethspi.rx_cond, TRUE, 2);
+  OS_DBG_print_thread(&ethspi.irq_thread, TRUE, 2);
+  OS_DBG_print_mutex(&ethspi.irq_mutex, TRUE, 2);
+  OS_DBG_print_cond(&ethspi.irq_cond, TRUE, 2);
+  OS_DBG_print_mutex(&ethspi.tx_mutex, TRUE, 2);
+  OS_DBG_print_cond(&ethspi.tx_cond, TRUE, 2);
 #endif
   print("HW\n");
   print("  irq pin:        %i\n", GPIO_read(SPI_ETH_INT_GPIO_PORT, SPI_ETH_INT_GPIO_PIN) ? 1 : 0);

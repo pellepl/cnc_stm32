@@ -55,6 +55,8 @@ void vuprint(int uart, const char* f, va_list arg_p);
 
 void v_printf(long p, const char* f, va_list arg_p);
 
+void printbuf(u8_t *buf, u16_t len);
+
 void u_itoa(unsigned int v, char* dst, int base, int num, int flags);
 void itoa(int v, char* dst, int base);
 void itoan(int v, char* dst, int base, int num);
