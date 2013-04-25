@@ -146,7 +146,7 @@ void printbuf(u8_t *buf, u16_t len) {
     for (i = ix; i < MIN(ix+32, len); i++) {
       print("%02x ", buf[i]);
     }
-    while (i++ < 32) {
+    while (i++ < ix+32) {
       print("   ");
     }
     print ("  ");
