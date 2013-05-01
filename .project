@@ -94,11 +94,6 @@
 			<type>2</type>
 			<location>/home/petera/proj/generic/tinyheap/src</location>
 		</link>
-		<link>
-			<name>xgcc-include</name>
-			<type>2</type>
-			<location>/home/petera/toolchain/gcc/arm-elf-tools-4.6.2/lib/gcc/arm-elf/4.6.2/include</location>
-		</link>
 	</linkedResources>
 	<filteredResources>
 		<filter>

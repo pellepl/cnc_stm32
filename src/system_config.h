@@ -36,6 +36,8 @@
 
 // Enable ENC28J60 ethernet spi driver
 #define CONFIG_ETHSPI
+#define UDP_client
+#define TCP_client
 
 // enable led driver
 #define CONFIG_LED

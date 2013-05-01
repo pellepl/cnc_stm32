@@ -2,11 +2,12 @@
 #include "stm32f10x.h"
 #include "os.h"
 #include "enc28j60.h"
-#include "ip_arp_udp.h"
+#include "ip_arp_udp_tcp.h"
 #include "net.h"
 #include "spi_dev_os_generic.h"
 #include "miniutils.h"
 #include "heap.h"
+#include "dhcp.h"
 
 #ifdef CONFIG_ETHSPI
 u8_t mac[6] = {0xcc,0xaa,0xff,0xee,0x00,0x11};
@@ -14,16 +15,20 @@ u8_t ip[4] = {192,168,0,150};
 
 spi_dev_gen _enc28j60_spi_dev;
 
+#define ETHSPI_MAX_PKT_SIZE       400
+
 static struct {
   volatile bool irq_pending;
   volatile bool active;
+
+  volatile bool dhcp_active;
 
   os_cond irq_cond;
   os_mutex irq_mutex;
   os_cond tx_cond;
   os_mutex tx_mutex;
-  u8_t rxbuf[512];
-  u8_t txbuf[512];
+  u8_t rxbuf[ETHSPI_MAX_PKT_SIZE];
+  u8_t txbuf[ETHSPI_MAX_PKT_SIZE];
   volatile void *rx_stack;
   os_thread irq_thread;
 
@@ -31,11 +36,19 @@ static struct {
   bool tx_pkt_free;
   bool rx_error;
   bool tx_error;
+
+  struct {
+    u8_t ipaddr[4];
+    u8_t mask[4];
+    u8_t gwip[4];
+    u8_t dhcp_server[4];
+    u8_t dns_server[4];
+  } dhcp;
 } ethspi;
 
 static void _eth_spi_handle_pkt() {
   u16_t rx_stat;
-  int plen = enc28j60PacketReceive(500, ethspi.rxbuf, &rx_stat);
+  int plen = enc28j60PacketReceive(ETHSPI_MAX_PKT_SIZE, ethspi.rxbuf, &rx_stat);
   if (plen == 0) {
     DBG(D_ETH, D_DEBUG, "ethspi no packet, rx_stat:%04x\n", rx_stat);
     return;
@@ -43,17 +56,34 @@ static void _eth_spi_handle_pkt() {
   DBG(D_ETH, D_DEBUG, "ethspi got packet, len %i, rx_stat:%04x\n", plen, rx_stat);
   //printbuf(ethspi.rxbuf, MIN(64, plen));
 
+  if (ethspi.dhcp_active) {
+    int dhcp_res;
+    dhcp_res = check_for_dhcp_answer(ethspi.rxbuf, plen);
+    DBG(D_ETH, D_DEBUG, "ethspi DHCP:%i state:%i\n", dhcp_res, dhcp_state());
+    if (dhcp_state() == DHCP_STATE_OK) {
+      ethspi.dhcp_active = FALSE;
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP OK\n");
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP ip   %i.%i.%i.%i\n", ethspi.dhcp.ipaddr[0], ethspi.dhcp.ipaddr[1], ethspi.dhcp.ipaddr[2], ethspi.dhcp.ipaddr[3]);
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP gwip %i.%i.%i.%i\n", ethspi.dhcp.gwip[0], ethspi.dhcp.gwip[1], ethspi.dhcp.gwip[2], ethspi.dhcp.gwip[3]);
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP mask %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP dhcp %i.%i.%i.%i\n", ethspi.dhcp.dhcp_server[0], ethspi.dhcp.dhcp_server[1], ethspi.dhcp.dhcp_server[2], ethspi.dhcp.dhcp_server[3]);
+      DBG(D_ETH, D_DEBUG, "ethspi DHCP dns  %i.%i.%i.%i\n", ethspi.dhcp.dns_server[0], ethspi.dhcp.dns_server[1], ethspi.dhcp.dns_server[2], ethspi.dhcp.dns_server[3]);
+      set_ip(ethspi.dhcp.ipaddr);
+    }
+    return;
+  }
+
   // arp is broadcast if unknown but a host may also
   // verify the mac address by sending it to
   // a unicast address.
   if (eth_type_is_arp_and_my_ip(ethspi.rxbuf, plen)) {
     memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
-    make_arp_answer_from_request(ethspi.txbuf, plen);
+    make_arp_answer_from_request(ethspi.txbuf);
     return;
   }
 
-  // check if ip packets (icmp or udp) are for us:
-  if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen) == 0) {
+  // check if ip packets (icmp or udp) are for us or broadcast:
+  if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen, TRUE) == 0) {
     return;
   }
 
@@ -65,19 +95,48 @@ static void _eth_spi_handle_pkt() {
     return;
   }
 
+
   // we listen on port 1200=0x4B0
   if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
       /*&& ethspi.rxbuf[UDP_DST_PORT_H_P] ==4  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xb0*/) {
     int payloadlen = /*ethspi.rxbuf[UDP_LEN_L_P]*/plen - 34 - UDP_HEADER_LEN;
     DBG(D_ETH, D_DEBUG, "ethspi UDP len:%i\n", payloadlen);
-    IF_DBG(D_ETH, D_DEBUG) {
-      printbuf(&ethspi.rxbuf[UDP_DATA_P], MIN(128, payloadlen));
-    }
     //char *nisse = "hello wurlde";
     //make_udp_reply_from_request(ethbuf, nisse, strlen(nisse), 1200);
-
-    return;
+    DBG(D_ETH, D_DEBUG, "ethspi eth mac dst: %02x.%02x.%02x.%02x.%02x.%02x\n",
+        ethspi.rxbuf[0], ethspi.rxbuf[1], ethspi.rxbuf[2], ethspi.rxbuf[3], ethspi.rxbuf[4], ethspi.rxbuf[5]); // ETH_DST_MAC
+    DBG(D_ETH, D_DEBUG, "ethspi eth mac src: %02x.%02x.%02x.%02x.%02x.%02x\n",
+        ethspi.rxbuf[6], ethspi.rxbuf[7], ethspi.rxbuf[8], ethspi.rxbuf[9], ethspi.rxbuf[10], ethspi.rxbuf[11]); // ETH_SRC_MAC
+    DBG(D_ETH, D_DEBUG, "ethspi eth type:    %02x %02x\n",
+        ethspi.rxbuf[12], ethspi.rxbuf[13]); // ETH_TYPE_H_P, ETH_TYPE_L_P
+    DBG(D_ETH, D_DEBUG, "ethspi ip src:  %i.%i.%i.%i\n",
+        ethspi.rxbuf[26], ethspi.rxbuf[27], ethspi.rxbuf[28], ethspi.rxbuf[29]); // IP_SRC_P
+    DBG(D_ETH, D_DEBUG, "ethspi ip dst:  %i.%i.%i.%i\n",
+        ethspi.rxbuf[30], ethspi.rxbuf[31], ethspi.rxbuf[32], ethspi.rxbuf[33]); // IP_DST_P
+    DBG(D_ETH, D_DEBUG, "ethspi udp src port:  %i\n",
+        (ethspi.rxbuf[34] << 8) | ethspi.rxbuf[35]); // UDP_SRC_PORT_H_P
+    DBG(D_ETH, D_DEBUG, "ethspi udp dst port:  %i\n",
+        (ethspi.rxbuf[36] << 8) | ethspi.rxbuf[37]); // UDP_DST_PORT_H_P
+    DBG(D_ETH, D_DEBUG, "ethspi udp len:       %04x\n",
+        (ethspi.rxbuf[38] << 8) | ethspi.rxbuf[39]); // UDP_LEN_H_P
+    DBG(D_ETH, D_DEBUG, "ethspi udp checksum:  %04x\n",
+        (ethspi.rxbuf[40] << 8) | ethspi.rxbuf[41]); // UDP_CHECKSUM_H_P
   }
+  IF_DBG(D_ETH, D_DEBUG) {
+    printbuf(&ethspi.rxbuf[0], plen);
+  }
+}
+
+void ETH_SPI_dhcp() {
+  ethspi.dhcp_active = TRUE;
+  dhcp_start(&ethspi.txbuf[0],
+      mac,
+      ethspi.dhcp.ipaddr,
+      ethspi.dhcp.mask,
+      ethspi.dhcp.gwip,
+      ethspi.dhcp.dhcp_server,
+      ethspi.dhcp.dns_server
+      );
 }
 
 void *ETH_SPI_irq_thread_handler(void *a) {
@@ -114,6 +173,9 @@ void *ETH_SPI_irq_thread_handler(void *a) {
       }
       if (eir & EIR_TXERIF) {
         DBG(D_ETH, D_WARN, "ethspi TXERR interrupt\n");
+        // reset transmit logic problem acc to errata
+        enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_TXRST);
+        enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         ethspi.tx_error = TRUE;
       }
@@ -225,7 +287,7 @@ void ETH_SPI_init() {
   SYS_hardsleep_ms(20);
   enc28j60PhyWrite(PHLCON,0x476);
   SYS_hardsleep_ms(20);
-  init_ip_arp_udp(mac, ip);
+  init_ip_arp_udp_tcp(mac, ip, 1234);
   DBG(D_ETH, D_INFO, "ethspi setup finished, ip %i.%i.%i.%i @ mac %02x.%02x.%02x.%02x.%02x.%02x\n",
       ip[0], ip[1], ip[2], ip[3], mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }

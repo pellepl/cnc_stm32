@@ -893,6 +893,9 @@ static cmd c_tbl[] = {
     {.name = "ethup",     .fn = (func)ETH_SPI_start,
         .help = "Start eth thread\n"
     },
+    {.name = "ethdhcp",     .fn = (func)ETH_SPI_dhcp,
+        .help = "Start DHCP\n"
+    },
     {.name = "ethdown",     .fn = (func)ETH_SPI_stop,
         .help = "Stop eth thread\n"
     },
