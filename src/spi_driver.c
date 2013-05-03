@@ -253,15 +253,23 @@ int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s)) {
 
 void SPI_init() {
   // setup spi bus descriptor
-  memset(__spi_bus_vec, 0, sizeof(__uart_vec));
+  memset(__spi_bus_vec, 0, sizeof(__spi_bus_vec));
 
   _SPI_BUS(0)->max_buf_len = SPI_BUFFER;
-  _SPI_BUS(0)->hw = SPI_MASTER;
+  _SPI_BUS(0)->hw = SPI1_MASTER;
   _SPI_BUS(0)->dma_rx_irq = DMA1_IT_TC2;
   _SPI_BUS(0)->dma_tx_irq = DMA1_IT_TC3;
-  _SPI_BUS(0)->dma_rx_channel = SPI_MASTER_Rx_DMA_Channel;
-  _SPI_BUS(0)->dma_tx_channel = SPI_MASTER_Tx_DMA_Channel;
-  _SPI_BUS(0)->nvic_irq = SPI_MASTER_Rx_IRQ_Channel;
+  _SPI_BUS(0)->dma_rx_channel = SPI1_MASTER_Rx_DMA_Channel;
+  _SPI_BUS(0)->dma_tx_channel = SPI1_MASTER_Tx_DMA_Channel;
+  _SPI_BUS(0)->nvic_irq = SPI1_MASTER_Rx_IRQ_Channel;
+
+  _SPI_BUS(1)->max_buf_len = SPI_BUFFER;
+  _SPI_BUS(1)->hw = SPI2_MASTER;
+  _SPI_BUS(1)->dma_rx_irq = DMA1_IT_TC4;
+  _SPI_BUS(1)->dma_tx_irq = DMA1_IT_TC5;
+  _SPI_BUS(1)->dma_rx_channel = SPI2_MASTER_Rx_DMA_Channel;
+  _SPI_BUS(1)->dma_tx_channel = SPI2_MASTER_Tx_DMA_Channel;
+  _SPI_BUS(1)->nvic_irq = SPI2_MASTER_Rx_IRQ_Channel;
 }
 
 bool SPI_is_busy(spi_bus *spi) {

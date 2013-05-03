@@ -131,12 +131,20 @@ void TIM2_IRQHandler(void)
 
 #ifdef CONFIG_SPI
 void DMA1_Channel2_IRQHandler() {
-  // DMA1 Channel 2 SPI RX
+  // DMA1 Channel 2 SPI1 RX
   SPI_irq(&__spi_bus_vec[0]);
 }
 void DMA1_Channel3_IRQHandler() {
-  // DMA1 Channel 3 SPI TX
+  // DMA1 Channel 3 SPI1 TX
   SPI_irq(&__spi_bus_vec[0]);
+}
+void DMA1_Channel4_IRQHandler() {
+  // DMA1 Channel 4 SPI2 RX
+  SPI_irq(&__spi_bus_vec[1]);
+}
+void DMA1_Channel5_IRQHandler() {
+  // DMA1 Channel 5 SPI2 TX
+  SPI_irq(&__spi_bus_vec[1]);
 }
 #endif
 

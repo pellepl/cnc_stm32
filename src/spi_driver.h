@@ -39,7 +39,7 @@ typedef struct spi_bus_s {
   volatile u32_t user_arg;
 } spi_bus;
 
-#define SPI_MAX_ID   1
+#define SPI_MAX_ID   2
 
 extern spi_bus __spi_bus_vec[SPI_MAX_ID];
 
@@ -80,23 +80,44 @@ int SPI_close(spi_bus *spi);
  */
 int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s));
 
+/**
+ * A call to spi config will reset bus, configure it and then (re)start the
+ * SPI clock
+ * @return SPI_OK
+ */
 int SPI_config(spi_bus *s, u16_t config);
 
+/**
+ * Returns if bus is busy or not
+ */
 bool SPI_is_busy(spi_bus *spi);
 
-
+/**
+ * Enable spi bus irq
+ */
 void SPI_enable_irq(spi_bus *spi);
+/**
+ * Disable spi bus irq
+ */
 void SPI_disable_irq(spi_bus *spi);
 
-
+/**
+ * Register a user of the spi bus
+ */
 void SPI_register(spi_bus *spi);
+/**
+ * Deregister a user of the spi bus, if reaching zero the spi bus is closed
+ */
 void SPI_release(spi_bus *spi);
 
+/**
+ * IRQ handler for spi buses
+ */
 void SPI_irq(spi_bus *spi);
 
-void SPI_enter_critical();
-void SPI_exit_critical();
-
+/**
+ * Initializes spi buses
+ */
 void SPI_init();
 
 #endif /* SPI_DRIVER_H_ */

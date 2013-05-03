@@ -47,11 +47,18 @@ static void RCC_config() {
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
 #ifdef CONFIG_SPI
-  /* Enable SPI_MASTER clock and GPIO clock for SPI_MASTER */
-  RCC_APB2PeriphClockCmd(SPI_MASTER_GPIO_CLK | SPI_MASTER_CLK, ENABLE);
+  /* Enable SPI1_MASTER clock and GPIO clock for SPI1_MASTER */
+  RCC_APB2PeriphClockCmd(SPI1_MASTER_GPIO_CLK | SPI1_MASTER_CLK, ENABLE);
 
-  /* Enable SPI_MASTER DMA clock */
-  RCC_AHBPeriphClockCmd(SPI_MASTER_DMA_CLK, ENABLE);
+  /* Enable SPI1_MASTER DMA clock */
+  RCC_AHBPeriphClockCmd(SPI1_MASTER_DMA_CLK, ENABLE);
+
+  /* Enable SPI2_MASTER clock and GPIO clock for SPI2_MASTER */
+  RCC_APB2PeriphClockCmd(SPI2_MASTER_GPIO_CLK, ENABLE);
+  RCC_APB1PeriphClockCmd(SPI2_MASTER_CLK, ENABLE);
+
+  /* Enable SPI2_MASTER DMA clock */
+  RCC_AHBPeriphClockCmd(SPI2_MASTER_DMA_CLK, ENABLE);
 
 #ifdef CONFIG_ETHSPI
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
@@ -61,7 +68,6 @@ static void RCC_config() {
 
 static void NVIC_config(void)
 {
-#if 1
   // Configure the NVIC Preemption Priority Bits
   // use 3 bits for preemption and 1 bit for  subgroup
   u8_t prioGrp = 8 - __NVIC_PRIO_BITS;
@@ -100,10 +106,15 @@ static void NVIC_config(void)
 
 #ifdef CONFIG_SPI
   // Config & enable the SPI-DMA interrupt
-  NVIC_SetPriority(SPI_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 0));
-  NVIC_EnableIRQ(SPI_MASTER_Rx_IRQ_Channel);
-  NVIC_SetPriority(SPI_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
-  NVIC_EnableIRQ(SPI_MASTER_Tx_IRQ_Channel);
+  NVIC_SetPriority(SPI1_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 0));
+  NVIC_EnableIRQ(SPI1_MASTER_Rx_IRQ_Channel);
+  NVIC_SetPriority(SPI1_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
+  NVIC_EnableIRQ(SPI1_MASTER_Tx_IRQ_Channel);
+
+  NVIC_SetPriority(SPI2_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 0));
+  NVIC_EnableIRQ(SPI2_MASTER_Rx_IRQ_Channel);
+  NVIC_SetPriority(SPI2_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
+  NVIC_EnableIRQ(SPI2_MASTER_Tx_IRQ_Channel);
 
 #ifdef CONFIG_ETHSPI
   // Config & enable the enc28j60 rx interrupt
@@ -116,99 +127,6 @@ static void NVIC_config(void)
   // Config & enable the dump button interrupt
   NVIC_SetPriority(OS_DUMP_IRQ_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 6, 0));
   NVIC_EnableIRQ(OS_DUMP_IRQ_EXTI_IRQn);
-#endif
-
-
-
-#else
-
-  NVIC_InitTypeDef NVIC_InitStructure;
-
-  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
-
-  /* Enable the TIM2 global Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-
-  NVIC_InitStructure.NVIC_IRQChannel = SysTick_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-
-  NVIC_InitStructure.NVIC_IRQChannel = PendSV_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 7;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-
-
-#ifdef CONFIG_UART1
-  /* Enable the USART1 Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-#ifdef CONFIG_UART2
-  /* Enable the USART2 Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-#ifdef CONFIG_UART3
-  /* Enable the USART3 Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-#ifdef CONFIG_UART4
-  /* Enable the USART4 Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = UART4_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-
-#ifdef CONFIG_SPI
-  /* Enable the SPI-DMA Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = SPI_MASTER_Rx_IRQ_Channel;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-  NVIC_InitStructure.NVIC_IRQChannel = SPI_MASTER_Tx_IRQ_Channel;
-  NVIC_Init(&NVIC_InitStructure);
-
-#ifdef CONFIG_ETHSPI
-  NVIC_InitStructure.NVIC_IRQChannel = SPI_ETH_INT_EXTI_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-#endif
-
-#if OS_DBG_MON
-  NVIC_InitStructure.NVIC_IRQChannel = OS_DUMP_IRQ_EXTI_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 6;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-#endif
-
-
-
-
 #endif
 
 }
@@ -368,20 +286,21 @@ static void SPI_config() {
   SPI_InitTypeDef  SPI_InitStructure;
   DMA_InitTypeDef  DMA_InitStructure;
 
+  // SPI1
 
-  /* Configure SPI_MASTER pins: NSS, SCK and MOSI */
-  GPIO_InitStructure.GPIO_Pin = SPI_MASTER_PIN_SCK | SPI_MASTER_PIN_MOSI | SPI_MASTER_PIN_MISO;
+  /* Configure SPI1_MASTER pins: NSS, SCK and MOSI */
+  GPIO_InitStructure.GPIO_Pin = SPI1_MASTER_PIN_SCK | SPI1_MASTER_PIN_MOSI | SPI1_MASTER_PIN_MISO;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_Init(SPI_MASTER_GPIO, &GPIO_InitStructure);
+  GPIO_Init(SPI1_MASTER_GPIO, &GPIO_InitStructure);
 
-  /* Configure SPI_MASTER pins: NSS, SCK and MOSI */
+  /* Configure SPI1_MASTER pins: NSS, SCK and MOSI */
   GPIO_InitStructure.GPIO_Pin = SPI_FLASH_GPIO_PIN;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
   GPIO_Init(SPI_FLASH_GPIO_PORT, &GPIO_InitStructure);
 
-  /* SPI_MASTER configuration */
+  /* SPI1_MASTER configuration */
   SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
   SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
   SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
@@ -391,13 +310,13 @@ static void SPI_config() {
   SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_64; // APB2/64
   SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
   SPI_InitStructure.SPI_CRCPolynomial = 7;
-  SPI_Init(SPI_MASTER, &SPI_InitStructure);
+  SPI_Init(SPI1_MASTER, &SPI_InitStructure);
 
 #ifndef CONFIG_SPI_POLL
   /* Configure SPI DMA common */
   // SPI1_BASE(APB2PERIPH_BASE(PERIPH_BASE(0x40000000) + 0x00010000) + 3000)
   // DataRegister offset = 0x0c = SPI1_BASE + 0x0c
-  DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(SPI_MASTER_BASE + 0x0c);
+  DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(SPI1_MASTER_BASE + 0x0c);
   DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
   DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
   DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
@@ -407,27 +326,85 @@ static void SPI_config() {
   DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
 
   /* Configure SPI DMA rx */
-  DMA_DeInit(SPI_MASTER_Rx_DMA_Channel);
+  DMA_DeInit(SPI1_MASTER_Rx_DMA_Channel);
   DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
   DMA_InitStructure.DMA_BufferSize = 0;
-  DMA_Init(SPI_MASTER_Rx_DMA_Channel, &DMA_InitStructure);
+  DMA_Init(SPI1_MASTER_Rx_DMA_Channel, &DMA_InitStructure);
 
   /* Configure SPI DMA tx */
-  DMA_DeInit(SPI_MASTER_Tx_DMA_Channel);
+  DMA_DeInit(SPI1_MASTER_Tx_DMA_Channel);
   DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralDST;
   DMA_InitStructure.DMA_BufferSize = 0;
-  DMA_Init(SPI_MASTER_Tx_DMA_Channel, &DMA_InitStructure);
+  DMA_Init(SPI1_MASTER_Tx_DMA_Channel, &DMA_InitStructure);
 
   /* Enable DMA SPI RX channel transfer complete interrupt */
-  DMA_ITConfig(SPI_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
+  DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
   /* Enable DMA SPI TX channel transfer complete interrupt */
   // Do not do this, always use tx/rx transfers, shred tx buffer
   // and only await DMA RX finished irq
   //DMA_ITConfig(SPI_MASTER_Tx_DMA_Channel, DMA_IT_TC, ENABLE);
 
   /* Enable SPI_MASTER DMA Rx/Tx request */
-  SPI_I2S_DMACmd(SPI_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , ENABLE);
+  SPI_I2S_DMACmd(SPI1_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , ENABLE);
 #endif // CONFIG_SPI_POLL
+
+
+  // SPI2
+
+  /* Configure SPI2_MASTER pins: NSS, SCK and MOSI */
+  GPIO_InitStructure.GPIO_Pin = SPI2_MASTER_PIN_SCK | SPI2_MASTER_PIN_MOSI | SPI2_MASTER_PIN_MISO;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_Init(SPI2_MASTER_GPIO, &GPIO_InitStructure);
+
+  /* SPI2_MASTER configuration */
+  SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+  SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+  SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+  SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
+  SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
+  SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
+  SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_64; // APB2/64
+  SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
+  SPI_InitStructure.SPI_CRCPolynomial = 7;
+  SPI_Init(SPI2_MASTER, &SPI_InitStructure);
+
+#ifndef CONFIG_SPI_POLL
+  /* Configure SPI DMA common */
+  // SPI1_BASE(APB2PERIPH_BASE(PERIPH_BASE(0x40000000) + 0x00010000) + 3000)
+  // DataRegister offset = 0x0c = SPI1_BASE + 0x0c
+  DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(SPI2_MASTER_BASE + 0x0c);
+  DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+  DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+  DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+  DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+  DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
+  DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;
+  DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+
+  /* Configure SPI2 DMA rx */
+  DMA_DeInit(SPI2_MASTER_Rx_DMA_Channel);
+  DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+  DMA_InitStructure.DMA_BufferSize = 0;
+  DMA_Init(SPI2_MASTER_Rx_DMA_Channel, &DMA_InitStructure);
+
+  /* Configure SPI DMA tx */
+  DMA_DeInit(SPI2_MASTER_Tx_DMA_Channel);
+  DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralDST;
+  DMA_InitStructure.DMA_BufferSize = 0;
+  DMA_Init(SPI2_MASTER_Tx_DMA_Channel, &DMA_InitStructure);
+
+  /* Enable DMA SPI RX channel transfer complete interrupt */
+  DMA_ITConfig(SPI2_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
+  /* Enable DMA SPI TX channel transfer complete interrupt */
+  // Do not do this, always use tx/rx transfers, shred tx buffer
+  // and only await DMA RX finished irq
+  //DMA_ITConfig(SPI2_MASTER_Tx_DMA_Channel, DMA_IT_TC, ENABLE);
+
+  /* Enable SPI_MASTER DMA Rx/Tx request */
+  SPI_I2S_DMACmd(SPI2_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , ENABLE);
+#endif // CONFIG_SPI_POLL
+
 #endif // CONFIG_SPI
 }
 
@@ -561,11 +538,17 @@ static void TIM_config() {
 
 static void SPI_config_bootloader() {
 #ifdef CONFIG_SPI
-  /* Disable DMA SPI RX channel transfer complete interrupt */
-  DMA_ITConfig(SPI_MASTER_Rx_DMA_Channel, DMA_IT_TC, DISABLE);
+  /* Disable DMA SPI1 RX channel transfer complete interrupt */
+  DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC, DISABLE);
 
-  /* Disable SPI_MASTER DMA Rx/Tx request */
-  SPI_I2S_DMACmd(SPI_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , DISABLE);
+  /* Disable SPI1_MASTER DMA Rx/Tx request */
+  SPI_I2S_DMACmd(SPI1_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , DISABLE);
+
+  /* Disable DMA SPI1 RX channel transfer complete interrupt */
+  DMA_ITConfig(SPI2_MASTER_Rx_DMA_Channel, DMA_IT_TC, DISABLE);
+
+  /* Disable SPI1_MASTER DMA Rx/Tx request */
+  SPI_I2S_DMACmd(SPI2_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , DISABLE);
 #endif // CONFIG_SPI
 }
 

@@ -10,8 +10,8 @@
 #include "dhcp.h"
 
 #ifdef CONFIG_ETHSPI
-u8_t mac[6] = {0xcc,0xaa,0xff,0xee,0x00,0x11};
-u8_t ip[4] = {192,168,0,150};
+u8_t mac[6] = ETH_MAC;
+u8_t ip[4] = ETH_IP;
 
 spi_dev_gen _enc28j60_spi_dev;
 
@@ -63,7 +63,7 @@ static void _eth_spi_handle_pkt() {
     if (dhcp_state() == DHCP_STATE_OK) {
       ethspi.dhcp_active = FALSE;
       DBG(D_ETH, D_DEBUG, "ethspi DHCP OK\n");
-      DBG(D_ETH, D_DEBUG, "ethspi DHCP ip   %i.%i.%i.%i\n", ethspi.dhcp.ipaddr[0], ethspi.dhcp.ipaddr[1], ethspi.dhcp.ipaddr[2], ethspi.dhcp.ipaddr[3]);
+      DBG(D_ETH, D_INFO, "ethspi DHCP ip   %i.%i.%i.%i\n", ethspi.dhcp.ipaddr[0], ethspi.dhcp.ipaddr[1], ethspi.dhcp.ipaddr[2], ethspi.dhcp.ipaddr[3]);
       DBG(D_ETH, D_DEBUG, "ethspi DHCP gwip %i.%i.%i.%i\n", ethspi.dhcp.gwip[0], ethspi.dhcp.gwip[1], ethspi.dhcp.gwip[2], ethspi.dhcp.gwip[3]);
       DBG(D_ETH, D_DEBUG, "ethspi DHCP mask %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
       DBG(D_ETH, D_DEBUG, "ethspi DHCP dhcp %i.%i.%i.%i\n", ethspi.dhcp.dhcp_server[0], ethspi.dhcp.dhcp_server[1], ethspi.dhcp.dhcp_server[2], ethspi.dhcp.dhcp_server[3]);
@@ -141,6 +141,9 @@ void ETH_SPI_dhcp() {
 
 void *ETH_SPI_irq_thread_handler(void *a) {
   DBG(D_ETH, D_INFO, "ethspi irq thread started\n");
+#ifdef ETH_INIT_DHCP
+  ETH_SPI_dhcp();
+#endif
 
   while (ethspi.active) {
     // await interrupt
@@ -271,7 +274,7 @@ void ETH_SPI_init() {
       SPIDEV_CONFIG_CPOL_LO |
       SPIDEV_CONFIG_FBIT_MSB |
       SPIDEV_CONFIG_SPEED_9M,
-      _SPI_BUS(0),
+      _SPI_BUS(1),
       SPI_ETH_GPIO_PORT, SPI_ETH_GPIO_PIN);
   DBG(D_ETH, D_DEBUG, "ethspi spigen open\n");
   SPI_DEV_GEN_open(&_enc28j60_spi_dev);
@@ -297,6 +300,9 @@ void ETH_SPI_dump() {
   print("State\n");
   print("  active:   %i\n", ethspi.active);
   print("  irq flag: %i\n", ethspi.irq_pending);
+  u8_t *ip = get_ip();
+  print("  ip:       %i.%i.%i.%i\n", ip[0], ip[1], ip[2], ip[3]);
+  print("  link up:  %i\n", enc28j60linkup());
 #if OS_DBG_MON
   print("OS\n");
   OS_DBG_print_thread(&ethspi.irq_thread, TRUE, 2);
