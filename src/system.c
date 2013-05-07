@@ -95,7 +95,7 @@ void SYS_assert(const char* file, int line) {
   CNC_enable_error(1<<CNC_ERROR_BIT_EMERGENCY);
 #endif
   UART_tx_flush(_UART(STDOUT));
-  uprint(STDOUT, "\nASSERT: %s:%i\n", file, line);
+  uprint(STDOUT, TEXT_BAD("\nASSERT: %s:%i\n"), file, line);
   UART_tx_flush(_UART(STDOUT));
   const int ASSERT_BLINK = 0x100000;
   volatile int a;

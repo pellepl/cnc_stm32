@@ -26,6 +26,16 @@
 #define ITOA_BASE_SIG           (1<<__ITOA_BASE_SIG_B)
 #define ITOA_CAPITALS           (1<<__ITOA_CAPITALS_B)
 
+#ifdef USE_COLOR_CODING
+#define TEXT_GOOD(s) "\033[1;32m"s"\033[m"
+#define TEXT_BAD(s) "\033[1;35m"s"\033[m"
+#define TEXT_NOTE(s) "\033[1;36m"s"\033[m"
+#else
+#define TEXT_GOOD(s) s
+#define TEXT_BAD(s) s
+#define TEXT_NOTE(s) s
+#endif
+
 typedef struct {
   char* s;
   char* wrk;
@@ -70,6 +80,7 @@ const char* strchr(const char* str, int ch);
 char* strpbrk(const char* str, const char* key);
 char* strstr(const char* str1, const char* str2);
 unsigned short crc_ccitt_16(unsigned short crc, unsigned char data);
+unsigned int rand(unsigned int seed);
 void quicksort(int* orders, void** pp, int elements);
 void quicksortCmp(int* orders, void** pp, int elements,
     int(*orderfunc)(void* p));

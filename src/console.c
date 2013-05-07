@@ -77,6 +77,8 @@ static int f_uread(int uart, int numchars);
 static int f_uconnect(int uart);
 static int f_uconf(int uart, int speed);
 
+static int f_rand();
+
 static int f_reset();
 static int f_reset_boot();
 static int f_reset_fw_upgrade();
@@ -104,6 +106,10 @@ static int f_spigtx(char *str);
 static int f_spigtxrx(char *str, int num);
 static int f_spigclose();
 
+static int f_col(int col) {
+  print("\033[1;3%im", col & 7);
+  return 0;
+}
 
 static int f_eth_up();
 
@@ -942,6 +948,12 @@ static cmd c_tbl[] = {
         .help = "Dumps state of os\n"
     },
 #endif
+    {.name = "rand",  .fn = (func)f_rand,
+        .help = "Generates pseudo random sequence\n"
+    },
+    {.name = "col",  .fn = (func)f_col,
+        .help = "Set text color\n"
+    },
     {.name = "reset",  .fn = (func)f_reset,
         .help = "Resets system\n"
     },
@@ -1216,6 +1228,12 @@ static int f_comm_uart(int uart) {
     return -1;
   }
   COMM_set_uart(_UART(uart));
+  return 0;
+}
+
+static u32_t __r__ = 0xd0decaed;
+static int f_rand() {
+  print("%08x\n", __r__ = rand(__r__));
   return 0;
 }
 
@@ -1910,7 +1928,7 @@ void DBG_TASK_on_input(u32_t len, void *p) {
       print("OK\n");
     }
   } else {
-    print("? - try help\n");
+    print("unknown command - try help\n");
   }
   print(CONSOLE_PROMPT);
 }

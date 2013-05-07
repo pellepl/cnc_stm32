@@ -13,6 +13,7 @@
 void ETH_SPI_init();
 void ETH_SPI_start();
 void ETH_SPI_dhcp();
+void ETH_SPI_send(u8_t *data, u16_t len);
 void ETH_SPI_stop();
 void ETH_SPI_irq();
 void ETH_SPI_dump();

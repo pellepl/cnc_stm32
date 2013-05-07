@@ -22,6 +22,7 @@
 os_thread main_thread;
 
 static void *main_thread_func(void *a) {
+  print(TEXT_NOTE("Kernel running...\n"));
   while (1) {
     if (!TASK_tick()) {
       __WFI();
@@ -116,7 +117,6 @@ int main(void) {
       "main_kernel");
 
   while(1) {
-    print("z");
     SYS_hardsleep_ms(500);
 #if OS_DBG_MON
     while (UART_rx_available(_UART(STDIN))) {
@@ -176,7 +176,7 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
 
   UART_tx_flush(_UART(STDOUT));
 
-  print("\n!!! HARDFAULT !!!\n\n");
+  print(TEXT_BAD("\n!!! HARDFAULT !!!\n\n"));
   print("Stacked registers:\n");
   print("  pc:   0x%08x\n", stacked_pc);
   print("  lr:   0x%08x\n", stacked_lr);

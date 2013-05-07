@@ -8,6 +8,7 @@
 #ifndef ENC28J60_SPI_HAL_H_
 #define ENC28J60_SPI_HAL_H_
 
+#include "enc28j60_spi_eth.h"
 #include "spi_dev_os_generic.h"
 #include "system.h"
 
@@ -18,6 +19,9 @@ extern spi_dev_gen _enc28j60_spi_dev;
 
 #define ENC28J60_HAL_SEQ(seq, len) \
   SPI_DEV_GEN_sequence(&_enc28j60_spi_dev, (spi_dev_sequence *)(seq), (u8_t)(len));
+
+#define ENC28J60_IFC_TX_ETH_FRAME(data, len) \
+  ETH_SPI_send((data), (len))
 
 // TODO
 #define ENC28J60_HAL_WAIT_US(t) \

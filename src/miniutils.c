@@ -409,6 +409,16 @@ unsigned short crc_ccitt_16(unsigned short crc, unsigned char data) {
   return crc;
 }
 
+#define TAPMASK       0x80000062U
+unsigned int rand(unsigned int seed) {
+  if (seed & 1) {
+    seed = (1 << 31) | ((seed ^ TAPMASK) >> 1);
+  } else {
+    seed >>= 1;
+  }
+  return seed;
+}
+
 void quicksort(int* orders, void** pp, int elements) {
 
 #define  MAX_LEVELS  32

@@ -231,12 +231,12 @@ static void __os_sleepers_update(list_t *q, time now) {
     case OS_THREAD: {
       // it was a thread, simply move from sleeping to running
       os_thread *t = OS_THREAD(e);
-      t->ret_val = TRUE;
       __os_enter_critical_kernel();
       list_delete(q, e);
       list_add(&os.q_running, e);
       list_set_order(e, OS_FOREVER);
       t->flags &= ~OS_THREAD_FLAG_SLEEP;
+      t->ret_val = TRUE;
       __os_exit_critical_kernel();
     }
     break;
@@ -418,7 +418,7 @@ u32_t OS_thread_id(os_thread *t) {
 u32_t OS_thread_yield(void) {
   ASSERT(g_crit_entry == 0);
   OS_svc_1((void*)OS_SVC_YIELD,0,0,0);
-  return 0;// TODO PETER might hardfault on us, r3 corrupted??: OS_thread_self()->ret_val;
+  return OS_thread_self()->ret_val;
 }
 
 void OS_thread_join(os_thread *t) {
@@ -604,7 +604,7 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
   bool into_sleep_queue;
   u32_t r;
   os_thread *self = OS_thread_self();
-  self->ret_val = TRUE;
+  self->ret_val = FALSE;
   __os_enter_critical_kernel();
 
   (void)OS_mutex_unlock_internal(m);
@@ -746,14 +746,14 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
   print("%s       sp:  %08x", tab,
       t->sp);
 #if OS_STACK_CHECK
-  print(" [%s]  ", (t->sp < t->stack_start || t->sp > t->stack_end) ? "BPTR":" ok ");
+  print(" [%s]  ", (t->sp < t->stack_start || t->sp > t->stack_end) ? TEXT_BAD("BPTR") :" ok ");
   bool sp_start_bad = t->stack_start < RAM_BEGIN || t->stack_start > RAM_END;
   bool sp_end_bad = t->stack_end < t->stack_start || t->stack_end > RAM_END;
   print("  sp_start:%08x [%s]  sp_end:%08x [%s]",
       t->stack_start,
-      sp_start_bad ? "BADR" : (*(u32_t*)(t->stack_start - 4) != OS_STACK_START_MARKER ? "CRPT" : " ok "),
+      sp_start_bad ? TEXT_BAD("BADR") : (*(u32_t*)(t->stack_start - 4) != OS_STACK_START_MARKER ? TEXT_BAD("CRPT") : " ok "),
       t->stack_end,
-      sp_end_bad ? "BADR" : (*(u32_t*)(t->stack_end) != OS_STACK_END_MARKER ? "CRPT" : " ok ")
+      sp_end_bad ? TEXT_BAD("BADR") : (*(u32_t*)(t->stack_end) != OS_STACK_END_MARKER ? TEXT_BAD("CRPT") : " ok ")
           );
 #if OS_STACK_USAGE_CHECK
   if (!sp_start_bad && !sp_end_bad) {
@@ -764,7 +764,10 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
       used_entries++;
     }
     u32_t perc = 100 - ((100 * used_entries) / ((t->stack_end - t->stack_start)/sizeof(u32_t)));
-    print("  used:%i%", perc);
+    print("  used:%i", perc);
+    if (perc > 97) {
+      print(TEXT_BAD(" ALMOST FULL"));
+    }
   }
 #endif
 #endif
@@ -781,7 +784,18 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
 static void OS_DBG_print_thread_list(list_t *l, bool detail, int indent) {
   element_t *cur = list_first(l);
   while (cur) {
-    OS_DBG_print_thread(OS_THREAD(cur), detail, indent);
+    os_type type = OS_TYPE(OS_OBJ(cur));
+    switch (type) {
+    case OS_THREAD:
+      OS_DBG_print_thread(OS_THREAD(cur), detail, indent);
+      break;
+    case OS_COND:
+      OS_DBG_print_cond(OS_COND(cur), detail, indent);
+      break;
+    default:
+      // TODO
+      break;
+    }
     cur = list_next(cur);
   }
 }
@@ -864,7 +878,7 @@ static void OS_DBG_list_conds() {
 void OS_DBG_list_all() {
   print("OS INFO\n-------\n");
   print("  Scheduled threads: %i\n", list_count(&os.q_running));
-  print("  Sleeping threads:  %i\n", list_count(&os.q_sleep));
+  print("  Sleeping entries:  %i\n", list_count(&os.q_sleep));
   print("  Spawned threads:   %i\n", g_id);
   print("  Critical depth:    %i\n", g_crit_entry);
   print("  Preemption:        %s\n", os.preemption ? "ON":"OFF");

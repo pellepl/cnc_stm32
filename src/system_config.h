@@ -37,7 +37,6 @@
 // Enable ENC28J60 ethernet spi driver
 #define CONFIG_ETHSPI
 #define UDP_client
-#define TCP_client
 
 // enable led driver
 #define CONFIG_LED
@@ -291,6 +290,8 @@ typedef uint16_t hw_io_pin;
 
 #define COMM_UART_LIST {COMMIN, BTIN}
 #define COMM_UARTS  2
+
+#define USE_COLOR_CODING
 
 /** ETH **/
 #define ETH_ENC28J60_MII_POLL_GUARD   (0x10000)
