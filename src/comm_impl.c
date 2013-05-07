@@ -325,7 +325,7 @@ static void COMM_TASK_on_pkt(u32_t arg, void* arg_p) {
   comm_arg *rx = (comm_arg *)arg_p;
 #if COMM_IMPL_USE_POOL
   // copy irq context pooled packet to kernel heap
-  // preventing pooled packet won't be overwritten by irq while kernel is parsing it
+  // preventing pooled packet to be overwritten by irq while kernel is parsing it
   u8_t *pkt_data = HEAP_malloc(rx->len);
   comm_arg *rx_new = HEAP_malloc(sizeof(comm_arg));
   ASSERT(pkt_data);

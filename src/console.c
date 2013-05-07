@@ -105,6 +105,7 @@ static int f_spigtxrx(char *str, int num);
 static int f_spigclose();
 
 
+static int f_eth_up();
 
 static int f_ethregr(int reg);
 static int f_ethregw(int reg, int data);
@@ -892,11 +893,8 @@ static cmd c_tbl[] = {
         .help = "Close generic spi device\n"
     },
 
-    {.name = "ethinit",     .fn = (func)ETH_SPI_init,
-        .help = "Initialize ENC28J60 spi eth device\n"
-    },
-    {.name = "ethup",     .fn = (func)ETH_SPI_start,
-        .help = "Start eth thread\n"
+    {.name = "ethup",     .fn = (func)f_eth_up,
+        .help = "Init enc28j60 and start eth thread\n"
     },
     {.name = "ethdhcp",     .fn = (func)ETH_SPI_dhcp,
         .help = "Start DHCP\n"
@@ -1720,6 +1718,12 @@ static int f_spigtxrx(char *tx_str, int rx_len) {
 static int f_spigclose() {
   print("spigen close\n");
   SPI_DEV_GEN_close(&spi_gdev);
+  return 0;
+}
+
+static int f_eth_up() {
+  ETH_SPI_init();
+  ETH_SPI_start();
   return 0;
 }
 

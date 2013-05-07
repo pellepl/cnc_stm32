@@ -99,9 +99,9 @@ static void _eth_spi_handle_pkt() {
   }
 
 
-  // we listen on port 1200=0x4B0
+  // we listen on port 0xcafe
   if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
-      /*&& ethspi.rxbuf[UDP_DST_PORT_H_P] ==4  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xb0*/) {
+      && ethspi.rxbuf[UDP_DST_PORT_H_P] == 0xca  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xf) {
     int payloadlen = ethspi.rxbuf[UDP_LEN_L_P]/*plen - 34 - UDP_HEADER_LEN*/;
     DBG(D_ETH, D_DEBUG, "ethspi UDP len:%i\n", payloadlen);
     //char *nisse = "hello wurlde";
@@ -153,7 +153,14 @@ void *ETH_SPI_irq_thread_handler(void *a) {
     if (!enc28j60hasRxPkt()) {
       OS_mutex_lock(&ethspi.irq_mutex);
       while (ethspi.active && !ethspi.irq_pending) {
-        OS_cond_wait(&ethspi.irq_cond, &ethspi.irq_mutex);
+        OS_cond_timed_wait(&ethspi.irq_cond, &ethspi.irq_mutex, 1000);
+        if (!ethspi.irq_pending && ethspi.dhcp_active && dhcp_state() != DHCP_STATE_OK) {
+          OS_mutex_unlock(&ethspi.irq_mutex);
+          DBG(D_ETH, D_INFO, "ethspi request dhcp\n");
+          ETH_SPI_dhcp();
+          OS_mutex_lock(&ethspi.irq_mutex);
+          continue;
+        }
       }
       ethspi.irq_pending = FALSE;
       OS_mutex_unlock(&ethspi.irq_mutex);

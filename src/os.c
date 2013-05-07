@@ -267,14 +267,18 @@ static void __os_sleepers_update(list_t *q, time now) {
   }
 }
 
+static void __os_update_first_awake() {
+  if (list_empty(&os.q_sleep)) {
+    os.first_awake = OS_FOREVER;
+  } else {
+    os.first_awake = list_get_order(list_first(&os.q_sleep));
+  }
+}
+
 void __os_time_tick(time now) {
   if (now >= os.first_awake) {
     __os_sleepers_update(&os.q_sleep, now);
-    if (list_empty(&os.q_sleep)) {
-      os.first_awake = OS_FOREVER;
-    } else {
-      os.first_awake = list_get_order(list_first(&os.q_sleep));
-    }
+    __os_update_first_awake();
   }
 }
 
@@ -512,6 +516,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
   list_move(&os.q_running, &m->q_block);
   // reset mutex
   m->lock = 0;
+
   m->owner = 0;
 #if OS_DBG_MON
       m->exited++;
@@ -601,6 +606,9 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
   os_thread *self = OS_thread_self();
   self->ret_val = TRUE;
   __os_enter_critical_kernel();
+
+  (void)OS_mutex_unlock_internal(m);
+
   into_sleep_queue = c->has_sleepers;
   time awake = SYS_get_time_ms() + delay;
   list_delete(&os.q_running, OS_ELEMENT(self));
@@ -632,10 +640,29 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
 
 
 u32_t OS_cond_signal(os_cond *c) {
+  os_thread *t;
   __os_enter_critical_kernel();
-  os_thread *t = OS_THREAD(list_first(&c->q_block));
+  // first, check if there are sleepers
+  if (!list_empty(&os.q_sleep)) {
+
+    // wake up first timed waiter
+    t = OS_THREAD(list_first(&c->q_sleep));
+    list_delete(&c->q_sleep, OS_ELEMENT(t));
+    // did the condition's sleep queue become empty?
+    if (list_empty(&c->q_sleep)) {
+      c->has_sleepers = FALSE;
+      // yep, remove condition from os sleep queue and update first_awake value.
+      list_delete(&os.q_sleep, OS_ELEMENT(c));
+      __os_update_first_awake();
+    }
+  } else {
+  // no sleepers, wake first blockee
+    t = OS_THREAD(list_first(&c->q_block));
+    if (t != NULL) {
+      list_delete(&c->q_block, OS_ELEMENT(t));
+    }
+  }
   if (t != NULL) {
-    list_delete(&c->q_block, OS_ELEMENT(t));
     list_add(&os.q_running, OS_ELEMENT(t));
 #if OS_DBG_MON
   c->signalled++;
@@ -647,6 +674,15 @@ u32_t OS_cond_signal(os_cond *c) {
 
 u32_t OS_cond_broadcast(os_cond *c) {
   __os_enter_critical_kernel();
+  // wake all sleepers
+  if (!list_empty(&os.q_sleep)) {
+    list_move(&os.q_running, &c->q_sleep);
+    //  remove condition from os sleep queue and update first_awake value.
+    c->has_sleepers = FALSE;
+    list_delete(&os.q_sleep, OS_ELEMENT(c));
+    __os_update_first_awake();
+  }
+  // wake all blockees
   list_move(&os.q_running, &c->q_block);
 #if OS_DBG_MON
   c->broadcasted++;
