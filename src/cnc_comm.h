@@ -11,6 +11,8 @@
 #include "system.h"
 #include "comm.h"
 
+#define COMM_PROTOCOL_CNC_ID              0x01
+
 #define CNC_COMM_VERSION                  0x00010000
 
 #define COMM_PROTOCOL_INFO                0x00
@@ -40,9 +42,6 @@
 #define COMM_PROTOCOL_GET_POS             0x20
 #define COMM_PROTOCOL_SET_OFFS_POS        0x21
 #define COMM_PROTOCOL_GET_OFFS_POS        0x22
-
-#define COMM_PROTOCOL_FILE_TRANSFER_R     0x80
-#define COMM_PROTOCOL_FILE_TRANSFER_A     0x81
 
 #define COMM_PROTOCOL_EVENT_SR_TIMER      0xe1
 #define COMM_PROTOCOL_EVENT_POS_TIMER     0xe2

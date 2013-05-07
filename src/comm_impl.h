@@ -19,6 +19,7 @@ void COMM_next_channel();
 void COMM_set_uart(uart *u);
 int COMM_dump();
 int COMM_tx(int dst, u8_t* data, u16_t len, int ack);
+int COMM_send_alert();
 int COMM_reply(u8_t *data, u16_t len);
 
 #endif /* COMM_TEST_H_ */

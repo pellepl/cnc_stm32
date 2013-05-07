@@ -268,6 +268,11 @@ typedef uint16_t hw_io_pin;
 
 // other communication id
 #define COMM_CONTROLLER_ADDRESS 2
+// store communication statistics
+#define COMM_IMPL_STATS     1
+// use packet pool
+#define COMM_IMPL_USE_POOL  1
+
 
 /** UART **/
 

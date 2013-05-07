@@ -23,6 +23,7 @@ enum op {
 };
 
 typedef struct  __attribute__ (( packed )) {
+  u8_t proto;
   u8_t cmd; // always COMM_PROTOCOL_FILE_TRANSFER_R
   u32_t sequence;
   u32_t length;
@@ -31,6 +32,7 @@ typedef struct  __attribute__ (( packed )) {
 } comm_file_hdr ;
 
 typedef struct  __attribute__ (( packed ))  {
+  u8_t proto;
   u8_t ack; // always COMM_PROTOCOL_FILE_TRANSFER_A
   u8_t res;
   u32_t last_stored_pkt_in_sequence;
@@ -68,6 +70,7 @@ static struct {
 
 static void _comm_file_spif_cb_abort(u8_t err) {
   comm_file_ack ack;
+  ack.proto = COMM_PROTOCOL_FILE_ID;
   ack.ack = COMM_PROTOCOL_FILE_TRANSFER_A;
   ack.res = (err);
   ack.last_stored_pkt_in_sequence = 0xffffffff;
@@ -166,6 +169,7 @@ static void _comm_file_spif_cb_req_next() {
     // more to download, request next packet
     comm_file_ack ack;
 
+    ack.proto = COMM_PROTOCOL_FILE_ID;
     ack.ack = COMM_PROTOCOL_FILE_TRANSFER_A;
     ack.res = COMM_FILE_REPLY_OK;
     ack.last_stored_pkt_in_sequence = state.wanted_sequence;
@@ -339,6 +343,7 @@ s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len) {
   if (abort_and_tx_stop) {
     comm_file_ack a;
     DBG(D_SYS, D_WARN, "COMMFILE pkt ERR -> ABORT\n");
+    a.proto = COMM_PROTOCOL_FILE_ID;
     a.ack = COMM_PROTOCOL_FILE_TRANSFER_A;
     a.res = COMM_FILE_ERR_ABORT;
     a.last_stored_pkt_in_sequence = 0xffffffff;

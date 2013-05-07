@@ -336,10 +336,11 @@ void CNC_COMM_on_err(u16_t seq, s32_t err) {
 
 static void cnc_sr_timer_task(u32_t ignore, void *ignore_more) {
   if (sr_timer_recurrence && pos_timer_recurrence != sr_timer_recurrence) {
-    u8_t buf[1 + sizeof(u32_t)];
-    buf[0] = COMM_PROTOCOL_EVENT_SR_TIMER;
+    u8_t buf[2 + sizeof(u32_t)];
+    buf[0] = COMM_PROTOCOL_CNC_ID;
+    buf[1] = COMM_PROTOCOL_EVENT_SR_TIMER;
     u32_t sr = CNC_get_status();
-    itomem(sr, &buf[1]);
+    itomem(sr, &buf[2]);
     COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), FALSE);
   }
 }
@@ -347,29 +348,32 @@ static void cnc_sr_timer_task(u32_t ignore, void *ignore_more) {
 static void cnc_pos_timer_task(u32_t ignore, void *ignore_more) {
   s32 x; s32 y; s32 z;
   if (pos_timer_recurrence && pos_timer_recurrence != sr_timer_recurrence) {
-    u8_t buf[1 + sizeof(u32_t)*3];
-    buf[0] = COMM_PROTOCOL_EVENT_POS_TIMER;
+    u8_t buf[2 + sizeof(u32_t)*3];
+    buf[0] = COMM_PROTOCOL_CNC_ID;
+    buf[1] = COMM_PROTOCOL_EVENT_POS_TIMER;
     CNC_get_pos(&x, &y, &z);
-    itomem(x, &buf[1]);
-    itomem(y, &buf[5]);
-    itomem(z, &buf[9]);
+    itomem(x, &buf[2]);
+    itomem(y, &buf[6]);
+    itomem(z, &buf[10]);
     COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), FALSE);
   } else if (pos_timer_recurrence && pos_timer_recurrence == sr_timer_recurrence) {
-    u8_t buf[1 + sizeof(u32_t)*4];
-    buf[0] = COMM_PROTOCOL_EVENT_SR_POS_TIMER;
+    u8_t buf[2 + sizeof(u32_t)*4];
+    buf[0] = COMM_PROTOCOL_CNC_ID;
+    buf[1] = COMM_PROTOCOL_EVENT_SR_POS_TIMER;
     CNC_get_pos(&x, &y, &z);
     u32_t sr = CNC_get_status();
-    itomem(sr, &buf[1]);
-    itomem(x, &buf[5]);
-    itomem(y, &buf[9]);
-    itomem(z, &buf[13]);
+    itomem(sr, &buf[2]);
+    itomem(x, &buf[6]);
+    itomem(y, &buf[10]);
+    itomem(z, &buf[14]);
     COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), FALSE);
   }
 }
 
 static void cnc_alive_timer_task(u32_t ignore, void *ignore_more) {
-  u8_t buf[1];
-  buf[0] = COMM_PROTOCOL_ALIVE;
+  u8_t buf[2];
+  buf[0] = COMM_PROTOCOL_CNC_ID;
+  buf[1] = COMM_PROTOCOL_ALIVE;
   s32_t res = COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), TRUE);
   if (res >= R_COMM_OK) {
     alive_msg_seqno = res;
@@ -381,9 +385,10 @@ static void cnc_alive_timer_task(u32_t ignore, void *ignore_more) {
 
 static void cnc_sr_cb_task(u32_t sr, void *ignore) {
   DBG(D_APP, D_DEBUG, "CNC callb: sr 0b%08b\n", sr);
-  u8_t buf[1 + sizeof(u32_t)];
-  buf[0] = COMM_PROTOCOL_EVENT_SR;
-  itomem(sr, &buf[1]);
+  u8_t buf[2 + sizeof(u32_t)];
+  buf[0] = COMM_PROTOCOL_CNC_ID;
+  buf[1] = COMM_PROTOCOL_EVENT_SR;
+  itomem(sr, &buf[2]);
   COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), FALSE);
 }
 
@@ -402,9 +407,10 @@ static void cnc_offs_irq_cb(s32_t x, s32_t y, s32_t z) {
 
 static void cnc_pipe_cb_task(u32_t id, void *ignore) {
   DBG(D_APP, D_DEBUG, "CNC callb: pipe id 0x%08x\n", id);
-  u8_t buf[1 + sizeof(u32_t)];
-  buf[0] = COMM_PROTOCOL_EVENT_ID;
-  itomem(id, &buf[1]);
+  u8_t buf[2 + sizeof(u32_t)];
+  buf[0] = COMM_PROTOCOL_CNC_ID;
+  buf[1] = COMM_PROTOCOL_EVENT_ID;
+  itomem(id, &buf[2]);
   COMM_tx(COMM_CONTROLLER_ADDRESS, &buf[0], sizeof(buf), FALSE);
 }
 

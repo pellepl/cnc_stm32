@@ -15,9 +15,6 @@
 #include "comm.h"
 #include "comm_file.h"
 
-#define COMM_IMPL_STATS     1
-#define COMM_IMPL_USE_POOL  1
-
 #define POOL_GUARD          0xee
 
 #if COMM_IMPL_STATS
@@ -88,6 +85,15 @@ int COMM_tx(int dst, u8_t* data, u16_t len, int ack) {
   return res;
 }
 
+int COMM_send_alert() {
+#if COMM_IMPL_STATS
+  pktcount_tx++;
+#endif
+  s32_t res = comm_alert(&_comm.driver, 0xbb, 0, 0);
+  if (res < R_COMM_OK) DBG(D_COMM, D_WARN, "COMM alert failed %i\n", res);
+  return res;
+}
+
 int COMM_reply(u8_t *data, u16_t len) {
   s32_t res = comm_reply(&_comm.driver, _comm.cur_rx, len, data);
   if (res < R_COMM_OK) DBG(D_COMM, D_WARN, "COMM reply failed %i\n", res);
@@ -97,6 +103,47 @@ int COMM_reply(u8_t *data, u16_t len) {
 //
 // comm callback implementations
 //
+
+// *** phy
+
+static void COMM_zcount_warn(u32_t a, void* v) {
+  DBG(D_COMM, D_WARN, "COMM %08i warn lots of zeros\n", SYS_get_time_ms());
+  UART_put_char(_comm.uart, '?');
+}
+
+//typedef int (*comm_phy_tx_char_fn)(unsigned char c);
+static int COMM_tx_char(unsigned char c) {
+  UART_put_char(_comm.uart, c);
+  return R_COMM_OK;
+}
+
+static int COMM_tx_buf(unsigned char *c, unsigned short len) {
+  s32_t res = UART_put_buf(_comm.uart, c, len);
+  return (res != len) ? R_COMM_PHY_FAIL : R_COMM_OK;
+}
+
+//typedef int (*comm_phy_rx_char_fn)(unsigned char *c);
+// NOT USED
+// doing callback in uart driver rx callback function instead
+
+
+// uart receive char callback function, irq context
+void COMM_comm_phy_rx(void* arg, u8_t c) {
+  comm* com = (comm*)arg;
+  if (c)
+    _comm.zcount = 0;
+  else
+    _comm.zcount++;
+  if (_comm.zcount > 256) {
+    task *pkt_task = TASK_create(COMM_zcount_warn, 0);
+    TASK_run(pkt_task, 0, 0);
+    _comm.zcount = 0;
+  }
+  // directly call communication stack phy layer rx to upper layer report function
+  com->phy.up_rx_f(com, c);
+}
+
+// *** memory
 
 //typedef void (*comm_lnk_alloc_rx_fn)(comm *comm, void **data, void **arg, unsigned int data_len, unsigned int arg_len);
 static void COMM_alloc(comm *c, void **data, void **arg, unsigned int size_data, unsigned int size_arg) {
@@ -129,25 +176,14 @@ static void COMM_free(comm *c, void *data, void *arg) {
 #endif
 }
 
+// *** clock
+
 //typedef comm_time (*comm_app_get_time_fn)(void);
 static comm_time COMM_get_tick_count() {
   return SYS_get_time_ms();
 }
 
-//typedef int (*comm_phy_tx_char_fn)(unsigned char c);
-static int COMM_tx_char(unsigned char c) {
-  UART_put_char(_comm.uart, c);
-  return R_COMM_OK;
-}
-
-static int COMM_tx_buf(unsigned char *c, unsigned short len) {
-  s32_t res = UART_put_buf(_comm.uart, c, len);
-  return (res != len) ? R_COMM_PHY_FAIL : R_COMM_OK;
-}
-
-//typedef int (*comm_phy_rx_char_fn)(unsigned char *c);
-// NOT USED
-// doing callback in uart driver rx callback function instead
+// ** stack
 
 static s16_t seq_delta(u16_t seqnoCurrent, u16_t seqnoLastRegistered) {
   if (seqnoCurrent < 0x100 && seqnoLastRegistered > 0xeff) {
@@ -232,10 +268,16 @@ static int COMM_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned c
 
 #ifdef CONFIG_CNC
   if (!already_received) {
-    if (data[0] == COMM_PROTOCOL_FILE_TRANSFER_R) {
-      res = COMM_FILE_on_pkt(data, len);
-    } else {
-      res = CNC_COMM_on_pkt(rx->seqno, data, len);
+    switch (data[0]) {
+    case COMM_PROTOCOL_CNC_ID:
+      res = CNC_COMM_on_pkt(rx->seqno, &data[1], len-1);
+      break;
+    case COMM_PROTOCOL_FILE_ID:
+      res = COMM_FILE_on_pkt(&data[0], len);
+      break;
+    default:
+      DBG(D_COMM, D_WARN, "COMM unrecognized protocol id %02x!\n", data[0]);
+      break;
     }
   }
 #endif
@@ -267,14 +309,129 @@ static void COMM_tra_inf(comm *comm, comm_arg *rx) {
   DBG(D_DEBUG, D_COMM, "COMM inf %02x\n", rx->data[0]);
 }
 
-static void COMM_zcount_warn(u32_t a, void* v) {
-  DBG(D_COMM, D_WARN, "COMM %08i warn lots of zeros\n", SYS_get_time_ms());
-  UART_put_char(_comm.uart, '?');
+static void COMM_alert(comm *comm, comm_addr addr, unsigned char type, unsigned short len, unsigned char *data) {
+
 }
 
 //
 // comm impl
 //
+
+// comm stack lnk layer circumvention, irq -> kernel context
+
+// called from link layer via task queue
+// for further comm stack handling
+static void COMM_TASK_on_pkt(u32_t arg, void* arg_p) {
+  comm_arg *rx = (comm_arg *)arg_p;
+#if COMM_IMPL_USE_POOL
+  // copy irq context pooled packet to kernel heap
+  // preventing pooled packet won't be overwritten by irq while kernel is parsing it
+  u8_t *pkt_data = HEAP_malloc(rx->len);
+  comm_arg *rx_new = HEAP_malloc(sizeof(comm_arg));
+  ASSERT(pkt_data);
+  ASSERT(rx_new);
+  ASSERT(rx->data[COMM_LNK_MAX_DATA] == POOL_GUARD);
+  memcpy(pkt_data, rx->data, rx->len);
+  memcpy(rx_new, rx, sizeof(comm_arg));
+  rx_new->data = pkt_data;
+
+  _comm.pool_use--;
+
+  _comm.post_link_comm_rx_up_f(&_comm.driver, rx_new);
+
+  HEAP_free(rx_new);
+  HEAP_free(pkt_data);
+#else
+  _comm.post_link_comm_rx_up_f(&_comm.driver, rx);
+  HEAP_free(rx->data);
+  HEAP_free(rx);
+#endif
+}
+
+// called from link layer when a packet is received, irq context
+// creates a task for further comm stack handling instead of keep calling from within irq
+static int COMM_comm_lnk_rx(comm *com, comm_arg *rx) {
+  task *pkt_task = TASK_create(COMM_TASK_on_pkt, 0);
+  TASK_run(pkt_task, 0, rx);
+  return R_COMM_OK;
+}
+
+// task timer, communication stack ticker
+static void COMM_ticker(u32_t a, void* p) {
+  comm_tick(&_comm.driver, COMM_get_tick_count());
+}
+
+//
+// app specific
+//
+
+void COMM_next_channel() {
+  _comm.channel++;
+  if (_comm.channel >= COMM_UARTS) {
+    _comm.channel = 0;
+  }
+  COMM_set_uart(_comm.channels[_comm.channel].uart);
+}
+
+// set communication stacks physical uart port
+void COMM_set_uart(uart* u) {
+  if (_comm.uart) {
+    UART_set_callback(_comm.uart, NULL, NULL);
+  }
+  _comm.uart = u;
+  UART_set_callback(_comm.uart, COMM_comm_phy_rx, &_comm.driver);
+}
+
+void COMM_init(uart* u) {
+  DBG(D_COMM, D_DEBUG, "COMM init\n");
+  memset(&_comm, 0, sizeof(comm));
+
+
+  // comm stack setup
+  comm_init(
+      &_comm.driver,        // comm stack struct
+      1,                    // this address
+      0,                    // comm_phy_rx_char - called from uart irq
+      COMM_tx_char,         // comm_phy_tx_char
+      COMM_tx_buf,          // comm_phy_tx_buf
+      0,                    // comm_phy_tx_flush
+      COMM_get_tick_count,  // comm_app_get_time
+      COMM_rx_pkt,          // comm_app_user_rx
+      COMM_ack_pkt,         // comm_app_user_ack
+      COMM_err,             // comm_app_user_err
+      COMM_tra_inf,         // comm_app_user_inf
+      COMM_alert            // comm_app_alert
+      );
+  // using comm stacks allocation callback for pkt buffers
+  comm_init_alloc(&_comm.driver, COMM_alloc, COMM_free);
+
+  // rewire communication stacks link callback to go via taskq
+  // save old upcall from link layer
+  _comm.post_link_comm_rx_up_f = _comm.driver.lnk.up_rx_f;
+  // set new upcall to invoke old upcall via task instead
+  _comm.driver.lnk.up_rx_f = COMM_comm_lnk_rx;
+
+  // start comm ticker
+  _comm.task = TASK_create(COMM_ticker, TASK_STATIC);
+  TASK_start_timer(_comm.task, &_comm.timer, 0, 0, 0, 100, "comm_tick");
+
+#if COMM_IMPL_STATS
+  clockpoint = SYS_get_time_ms();
+#endif
+
+  {
+    const u8_t comm_uart_list[] = COMM_UART_LIST;
+    int i;
+    for (i = 0; i < COMM_UARTS; i++) {
+      _comm.channels[i].uart = _UART(comm_uart_list[i]);
+    }
+  }
+
+  // put UART characters into comms phy layer
+  COMM_set_uart(u);
+
+  // stack now active
+}
 
 int COMM_dump() {
   int i,j;
@@ -316,129 +473,4 @@ int COMM_dump() {
 
   return 0;
 }
-
-// uart receive char callback function, irq context
-void COMM_comm_phy_rx(void* arg, u8_t c) {
-  comm* com = (comm*)arg;
-  if (c)
-    _comm.zcount = 0;
-  else
-    _comm.zcount++;
-  if (_comm.zcount > 256) {
-    task *pkt_task = TASK_create(COMM_zcount_warn, 0);
-    TASK_run(pkt_task, 0, 0);
-    _comm.zcount = 0;
-  }
-  // directly call communication stack phy layer rx to upper layer report function
-  com->phy.up_rx_f(com, c);
-}
-
-// called from link layer via task queue
-// for further comm stack handling
-static void COMM_TASK_on_pkt(u32_t arg, void* arg_p) {
-  comm_arg *rx = (comm_arg *)arg_p;
-#if COMM_IMPL_USE_POOL
-  // copy irq context pooled packet to task context heap
-  u8_t *pkt_data = HEAP_malloc(rx->len);
-  comm_arg *rx_new = HEAP_malloc(sizeof(comm_arg));
-  ASSERT(pkt_data);
-  ASSERT(rx_new);
-  ASSERT(rx->data[COMM_LNK_MAX_DATA] == POOL_GUARD);
-  memcpy(pkt_data, rx->data, rx->len);
-  memcpy(rx_new, rx, sizeof(comm_arg));
-  rx_new->data = pkt_data;
-
-  _comm.pool_use--;
-
-  _comm.post_link_comm_rx_up_f(&_comm.driver, rx_new);
-
-  HEAP_free(rx_new);
-  HEAP_free(pkt_data);
-#else
-  _comm.post_link_comm_rx_up_f(&_comm.driver, rx);
-  HEAP_free(rx->data);
-  HEAP_free(rx);
-#endif
-}
-
-// called from link layer when a packet is received, irq context
-// creates a task for further comm stack handling instead of keep calling from within irq
-static int COMM_comm_lnk_rx(comm *com, comm_arg *rx) {
-  task *pkt_task = TASK_create(COMM_TASK_on_pkt, 0);
-  TASK_run(pkt_task, 0, rx);
-  return R_COMM_OK;
-}
-
-// task timer, communication stack ticker
-static void COMM_ticker(u32_t a, void* p) {
-  comm_tick(&_comm.driver, COMM_get_tick_count());
-}
-
-void COMM_next_channel() {
-  _comm.channel++;
-  if (_comm.channel >= COMM_UARTS) {
-    _comm.channel = 0;
-  }
-  COMM_set_uart(_comm.channels[_comm.channel].uart);
-}
-
-// set communication stacks physical uart port
-void COMM_set_uart(uart* u) {
-  if (_comm.uart) {
-    UART_set_callback(_comm.uart, NULL, NULL);
-  }
-  _comm.uart = u;
-  UART_set_callback(_comm.uart, COMM_comm_phy_rx, &_comm.driver);
-}
-
-void COMM_init(uart* u) {
-  DBG(D_COMM, D_DEBUG, "COMM init\n");
-  memset(&_comm, 0, sizeof(comm));
-
-
-  // comm stack setup
-  comm_init(
-      &_comm.driver,        // comm stack struct
-      1,                    // this address
-      0,                    // comm_phy_rx_char - called from uart irq
-      COMM_tx_char,         // comm_phy_tx_char
-      COMM_tx_buf,          // comm_phy_tx_buf
-      0,                    // comm_phy_tx_flush
-      COMM_get_tick_count,  // comm_app_get_time
-      COMM_rx_pkt,          // comm_app_user_rx
-      COMM_ack_pkt,         // comm_app_user_ack
-      COMM_err,             // comm_app_user_err
-      COMM_tra_inf          // comm_app_user_inf
-      );
-  // using comm stacks allocation callback for pkt buffers
-  comm_init_alloc(&_comm.driver, COMM_alloc, COMM_free);
-
-  // rewire communication stacks link callback to go via taskq
-  // save old upcall from link layer
-  _comm.post_link_comm_rx_up_f = _comm.driver.lnk.up_rx_f;
-  // set new upcall to invoke old upcall via task instead
-  _comm.driver.lnk.up_rx_f = COMM_comm_lnk_rx;
-
-  // start comm ticker
-  _comm.task = TASK_create(COMM_ticker, TASK_STATIC);
-  TASK_start_timer(_comm.task, &_comm.timer, 0, 0, 0, 100, "comm_tick");
-
-#if COMM_IMPL_STATS
-  clockpoint = SYS_get_time_ms();
-#endif
-
-  {
-    const u8_t comm_uart_list[] = COMM_UART_LIST;
-    int i;
-    for (i = 0; i < COMM_UARTS; i++) {
-      _comm.channels[i].uart = _UART(comm_uart_list[i]);
-    }
-  }
-
-  // put UART characters into comms phy layer
-  COMM_set_uart(u);
-
-  // stack now active
-}
-
 

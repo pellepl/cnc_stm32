@@ -10,8 +10,8 @@
 #include "dhcp.h"
 
 #ifdef CONFIG_ETHSPI
-u8_t mac[6] = ETH_MAC;
-u8_t ip[4] = ETH_IP;
+u8_t mac_address[6] = ETH_MAC;
+u8_t ip_address[4] = ETH_IP;
 
 spi_dev_gen _enc28j60_spi_dev;
 
@@ -56,6 +56,7 @@ static void _eth_spi_handle_pkt() {
   DBG(D_ETH, D_DEBUG, "ethspi got packet, len %i, rx_stat:%04x\n", plen, rx_stat);
   //printbuf(ethspi.rxbuf, MIN(64, plen));
 
+  // doing dhcp, do not allow anything else right now
   if (ethspi.dhcp_active) {
     int dhcp_res;
     dhcp_res = check_for_dhcp_answer(ethspi.rxbuf, plen);
@@ -68,6 +69,7 @@ static void _eth_spi_handle_pkt() {
       DBG(D_ETH, D_DEBUG, "ethspi DHCP mask %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
       DBG(D_ETH, D_DEBUG, "ethspi DHCP dhcp %i.%i.%i.%i\n", ethspi.dhcp.dhcp_server[0], ethspi.dhcp.dhcp_server[1], ethspi.dhcp.dhcp_server[2], ethspi.dhcp.dhcp_server[3]);
       DBG(D_ETH, D_DEBUG, "ethspi DHCP dns  %i.%i.%i.%i\n", ethspi.dhcp.dns_server[0], ethspi.dhcp.dns_server[1], ethspi.dhcp.dns_server[2], ethspi.dhcp.dns_server[3]);
+      memcpy(ip_address, ethspi.dhcp.ipaddr, 4);
       set_ip(ethspi.dhcp.ipaddr);
     }
     return;
@@ -83,23 +85,24 @@ static void _eth_spi_handle_pkt() {
   }
 
   // check if ip packets (icmp or udp) are for us or broadcast:
-  if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen, TRUE) == 0) {
-    return;
-  }
-
-  if (ethspi.rxbuf[IP_PROTO_P]==IP_PROTO_ICMP_V &&
-      ethspi.rxbuf[ICMP_TYPE_P]==ICMP_TYPE_ECHOREQUEST_V){
-    // a ping packet, let's send pong
-    memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
-    make_echo_reply_from_request(ethspi.txbuf, plen);
-    return;
+  if (eth_type_is_ip_and_broadcast(ethspi.rxbuf, plen) == 0) {
+    if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen) == 0) {
+      return;
+    }
+    if (ethspi.rxbuf[IP_PROTO_P]==IP_PROTO_ICMP_V &&
+        ethspi.rxbuf[ICMP_TYPE_P]==ICMP_TYPE_ECHOREQUEST_V){
+      // a ping packet, let's send pong
+      memcpy(ethspi.txbuf, ethspi.rxbuf, plen);
+      make_echo_reply_from_request(ethspi.txbuf, plen);
+      return;
+    }
   }
 
 
   // we listen on port 1200=0x4B0
   if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
       /*&& ethspi.rxbuf[UDP_DST_PORT_H_P] ==4  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xb0*/) {
-    int payloadlen = /*ethspi.rxbuf[UDP_LEN_L_P]*/plen - 34 - UDP_HEADER_LEN;
+    int payloadlen = ethspi.rxbuf[UDP_LEN_L_P]/*plen - 34 - UDP_HEADER_LEN*/;
     DBG(D_ETH, D_DEBUG, "ethspi UDP len:%i\n", payloadlen);
     //char *nisse = "hello wurlde";
     //make_udp_reply_from_request(ethbuf, nisse, strlen(nisse), 1200);
@@ -130,7 +133,7 @@ static void _eth_spi_handle_pkt() {
 void ETH_SPI_dhcp() {
   ethspi.dhcp_active = TRUE;
   dhcp_start(&ethspi.txbuf[0],
-      mac,
+      mac_address,
       ethspi.dhcp.ipaddr,
       ethspi.dhcp.mask,
       ethspi.dhcp.gwip,
@@ -279,7 +282,7 @@ void ETH_SPI_init() {
   DBG(D_ETH, D_DEBUG, "ethspi spigen open\n");
   SPI_DEV_GEN_open(&_enc28j60_spi_dev);
   DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init\n");
-  enc28j60Init(mac, EIE_PKTIE | EIE_TXIE | EIE_RXERIE | EIE_TXERIE);
+  enc28j60Init(mac_address, EIE_PKTIE | EIE_TXIE | EIE_RXERIE | EIE_TXERIE);
 
   DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init done, chip rev %02x\n", enc28j60getrev());
   DBG(D_ETH, D_DEBUG, "ethspi mac readback: %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -290,19 +293,23 @@ void ETH_SPI_init() {
   SYS_hardsleep_ms(20);
   enc28j60PhyWrite(PHLCON,0x476);
   SYS_hardsleep_ms(20);
-  init_ip_arp_udp_tcp(mac, ip, 1234);
+
+  // init eth/ip layer
+  init_ip_arp_udp_tcp(mac_address, ip_address, 80);
+
   DBG(D_ETH, D_INFO, "ethspi setup finished, ip %i.%i.%i.%i @ mac %02x.%02x.%02x.%02x.%02x.%02x\n",
-      ip[0], ip[1], ip[2], ip[3], mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      ip_address[0], ip_address[1], ip_address[2], ip_address[3], mac_address[0], mac_address[1], mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
 }
 
 void ETH_SPI_dump() {
   print("ETH SPI\n-------\n");
   print("State\n");
-  print("  active:   %i\n", ethspi.active);
-  print("  irq flag: %i\n", ethspi.irq_pending);
-  u8_t *ip = get_ip();
-  print("  ip:       %i.%i.%i.%i\n", ip[0], ip[1], ip[2], ip[3]);
-  print("  link up:  %i\n", enc28j60linkup());
+  print("  active:         %s\n", ethspi.active ? "ENABLED" : "DISABLED");
+  print("  dhcp active:    %s\n", ethspi.dhcp_active ? "ACTIVE" : "INACTIVE");
+  print("  local ip:       %i.%i.%i.%i\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+  print("  gateway ip:     %i.%i.%i.%i\n", ethspi.dhcp.gwip[0], ethspi.dhcp.gwip[1], ethspi.dhcp.gwip[2], ethspi.dhcp.gwip[3]);
+  print("  mask:           %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
+  print("  link up:        %s\n", enc28j60linkup() ? "YES": "NO");
 #if OS_DBG_MON
   print("OS\n");
   OS_DBG_print_thread(&ethspi.irq_thread, TRUE, 2);
@@ -312,12 +319,13 @@ void ETH_SPI_dump() {
   OS_DBG_print_cond(&ethspi.tx_cond, TRUE, 2);
 #endif
   print("HW\n");
-  print("  irq pin:        %i\n", GPIO_read(SPI_ETH_INT_GPIO_PORT, SPI_ETH_INT_GPIO_PIN) ? 1 : 0);
   print("  chip rev:       %02x\n", enc28j60getrev());
   print("  mac readback:   %02x:%02x:%02x:%02x:%02x:%02x\n",
       enc28j60Read(MAADR5), enc28j60Read(MAADR4), enc28j60Read(MAADR3),
       enc28j60Read(MAADR2), enc28j60Read(MAADR1), enc28j60Read(MAADR0)
   );
+  print("  irq flag:       %i\n", ethspi.irq_pending);
+  print("  irq pin:        %i\n", GPIO_read(SPI_ETH_INT_GPIO_PORT, SPI_ETH_INT_GPIO_PIN) ? 1 : 0);
   u8_t eie = enc28j60Read(EIE);
   u8_t eir = enc28j60Read(EIR);
   print("  EPKTCNT:        %02x\n", enc28j60Read(EPKTCNT));

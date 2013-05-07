@@ -11,6 +11,11 @@
 #include "system.h"
 #include "comm.h"
 
+#define COMM_PROTOCOL_FILE_ID             0x02
+
+#define COMM_PROTOCOL_FILE_TRANSFER_R     0x80
+#define COMM_PROTOCOL_FILE_TRANSFER_A     0x81
+
 #define COMM_FILE_REPLY_OK          0x04
 #define COMM_FILE_ERR_NO_SPACE      0x11
 #define COMM_FILE_ERR_UNEXPECTED    0x12

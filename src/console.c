@@ -69,6 +69,7 @@ static int f_cnc_err_off(int);
 #endif
 
 static int f_comm_send(int dst, char* data, int ack);
+static int f_comm_alert();
 static int f_comm_uart(int uart);
 
 static int f_uwrite(int uart, char* data);
@@ -769,6 +770,10 @@ static cmd c_tbl[] = {
             "comm_send <dest> <data> <acked>\n"\
             "ex: comm_send 2 \"hello world\" 1\n"
     },
+    {.name = "comm_alert",  .fn = (func)f_comm_alert,
+            .help = "Sends alert packet\n"\
+            "ex: comm_alert\n"
+    },
     {.name = "comm_uart",  .fn = (func)f_comm_uart,
         .help = "Set CNC communication uart\n"\
         "comm_uart <uart>\n"\
@@ -1194,6 +1199,16 @@ static int f_comm_send(int dst, char* data, int ack) {
     print("COMM ERROR: %i\n", res);
   } else {
     print("Sent, seqno:0x%03x\n", res);
+  }
+  return 0;
+}
+
+static int f_comm_alert() {
+  s32_t res = COMM_send_alert();
+  if (res < R_COMM_OK) {
+    print("COMM ERROR: %i\n", res);
+  } else {
+    print("alert sent\n", res);
   }
   return 0;
 }
