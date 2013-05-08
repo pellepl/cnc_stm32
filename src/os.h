@@ -112,7 +112,7 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent);
 bool OS_DBG_print_cond(os_cond *c, bool detail, int indent);
 bool OS_DBG_print_mutex(os_mutex *m, bool detail, int indent);
 void OS_DBG_dump();
-void OS_DBG_list_all();
+void OS_DBG_list_all(bool prev_preempt);
 #ifdef OS_DUMP_IRQ
 void OS_DBG_dump_irq();
 #endif

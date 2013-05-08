@@ -875,13 +875,13 @@ static void OS_DBG_list_conds() {
   }
 }
 
-void OS_DBG_list_all() {
+void OS_DBG_list_all(bool previous_preempt) {
   print("OS INFO\n-------\n");
   print("  Scheduled threads: %i\n", list_count(&os.q_running));
   print("  Sleeping entries:  %i\n", list_count(&os.q_sleep));
   print("  Spawned threads:   %i\n", g_id);
   print("  Critical depth:    %i\n", g_crit_entry);
-  print("  Preemption:        %s\n", os.preemption ? "ON":"OFF");
+  print("  Preemption:        %s\n", previous_preempt ? "ON":"OFF");
   print("  First awake:       %08x (%08x in future)\n", os.first_awake, os.first_awake - SYS_get_tick());
   OS_DBG_list_threads();
   OS_DBG_list_mutexes();
@@ -890,14 +890,14 @@ void OS_DBG_list_all() {
 
 void OS_DBG_dump() {
   bool pre = OS_enter_critical();
-  OS_DBG_list_all();
+  OS_DBG_list_all(pre);
   OS_exit_critical(pre);
 }
 
 #ifdef OS_DUMP_IRQ
 void OS_DBG_dump_irq() {
   if(EXTI_GetITStatus(OS_DUMP_IRQ_EXTI_LINE) != RESET) {
-    OS_DBG_list_all();
+    OS_DBG_list_all(os.preemption);
     EXTI_ClearITPendingBit(OS_DUMP_IRQ_EXTI_LINE);
   }
 }

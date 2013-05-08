@@ -139,7 +139,7 @@ int main(void) {
     while (UART_rx_available(_UART(STDIN))) {
       if (UART_get_char(_UART(STDIN)) == ' ') {
         print("DEBUG MONITOR\n");
-        OS_DBG_list_all();
+        OS_DBG_list_all(TRUE);
       }
     }
 #endif
