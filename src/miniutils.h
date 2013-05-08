@@ -81,6 +81,8 @@ char* strpbrk(const char* str, const char* key);
 char* strstr(const char* str1, const char* str2);
 unsigned short crc_ccitt_16(unsigned short crc, unsigned char data);
 unsigned int rand(unsigned int seed);
+void rand_seed(unsigned int seed);
+unsigned int rand_next();
 void quicksort(int* orders, void** pp, int elements);
 void quicksortCmp(int* orders, void** pp, int elements,
     int(*orderfunc)(void* p));

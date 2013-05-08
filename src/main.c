@@ -8,10 +8,11 @@
 #include "miniutils.h"
 #include "taskq.h"
 #include "heap.h"
-#include "console.h"
+#include "cli.h"
 #include "processor.h"
 #include "nvstorage.h"
 #include "spi_driver.h"
+#include "adc.h"
 #include "led.h"
 #include "os.h"
 #include "linker_symaccess.h"
@@ -49,6 +50,9 @@ int main(void) {
   LED_init(LED_TIMER_DIVISOR);
 #endif
   PROC_periph_init();
+#ifdef CONFIG_ADC14
+  ADC_init();
+#endif
   print("\n\n\nHardware initialization done\n");
 
   print("Shared memory on 0x%08x\n", SHARED_MEMORY_ADDRESS);
@@ -106,7 +110,20 @@ int main(void) {
 
   print("Main thread stack size: %i bytes\n", __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA);
 
-  DBG_init();
+  CLI_init();
+
+#ifdef CONFIG_ADC14
+  {
+    int i = 16;
+    uint32_t s = 0;
+    while (i--) {
+      s ^= (ADC_sample() << (i*2));
+    }
+    rand_seed(s);
+  }
+#else
+  rand_seed(0xd0decaed ^ SYS_get_tick());
+#endif
 
   OS_thread_create(
       &main_thread,

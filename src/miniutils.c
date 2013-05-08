@@ -419,6 +419,16 @@ unsigned int rand(unsigned int seed) {
   return seed;
 }
 
+static unsigned int _rand_seed = 0;
+unsigned int rand_next() {
+  _rand_seed = rand(_rand_seed);
+  return _rand_seed;
+}
+
+void rand_seed(unsigned int seed) {
+  _rand_seed = seed;
+}
+
 void quicksort(int* orders, void** pp, int elements) {
 
 #define  MAX_LEVELS  32

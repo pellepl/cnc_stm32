@@ -294,6 +294,7 @@ void ETH_SPI_dhcp() {
   ethspi.dhcp.active = TRUE;
   ethspi.dhcp.query = TRUE;
   dhcp_start(&ethspi.txbuf[0],
+      ETHSPI_MAX_PKT_SIZE,
       mac_address,
       ethspi.dhcp.ipaddr,
       ethspi.dhcp.mask,

@@ -103,13 +103,14 @@ FILES = 	processor.c \
 			spi_flash_m25p16.c \
 			spi_dev_os_generic.c \
 			timer.c \
+			adc.c \
 			cnc_control.c \
 			cnc_comm.c \
 			comm_impl.c \
 			miniutils.c \
 			taskq.c \
 			heap.c \
-			console.c \
+			cli.c \
 			list.c \
 			os.c \
 			enc28j60_spi_eth.c \

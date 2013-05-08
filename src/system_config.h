@@ -251,6 +251,10 @@ typedef uint16_t hw_io_pin;
 
 #endif
 
+/** ADC **/
+
+#define CONFIG_ADC14
+
 
 /****************************************************/
 /******** Application build time configuration ******/

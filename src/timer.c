@@ -11,7 +11,7 @@
 #include "miniutils.h"
 #include "uart.h"
 #include "cnc_control.h"
-#include "console.h"
+#include "cli.h"
 #include "led.h"
 #include "os.h"
 
@@ -31,6 +31,6 @@ void TIMER_irq() {
     if (ms_update) {
       __os_time_tick(SYS_get_time_ms());
     }
-    DBG_timer();
+    CLI_timer();
   }
 }

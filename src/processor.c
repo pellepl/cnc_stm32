@@ -64,6 +64,11 @@ static void RCC_config() {
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
 #endif
 #endif
+
+#ifdef CONFIG_ADC14
+  RCC_ADCCLKConfig(RCC_PCLK2_Div2);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+#endif
 }
 
 static void NVIC_config(void)
@@ -534,6 +539,17 @@ static void TIM_config() {
   TIM_Cmd(TIM2, ENABLE);
 }
 
+static void ADC_config() {
+#ifdef CONFIG_ADC14
+  GPIO_InitTypeDef GPIO_InitStructure;
+
+  /* Configure PC.05 (ADC Channel15) as analog input */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+#endif
+}
+
 // bootloader settings
 
 static void SPI_config_bootloader() {
@@ -572,6 +588,7 @@ void PROC_periph_init() {
   ETH_SPI_config();
   TIM_config();
   CNC_config();
+  ADC_config();
   OS_DUMP_IRQ_config();
 }
 
