@@ -1,6 +1,6 @@
 #include "list.h"
 
-#define LIST_ASSERT(x) /*ASSERT(x)*/
+#define LIST_ASSERT(x) ASSERT(x)
 
 void list_init(list_t* l) {
 	l->first_element = NULL;

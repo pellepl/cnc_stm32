@@ -659,7 +659,7 @@ u32_t OS_cond_signal(os_cond *c) {
   os_thread *t;
   __os_enter_critical_kernel();
   // first, check if there are sleepers
-  if (!list_empty(&os.q_sleep)) {
+  if (!list_empty(&c->q_sleep)) {
 
     // wake up first timed waiter
     t = OS_THREAD(list_first(&c->q_sleep));
@@ -697,7 +697,7 @@ u32_t OS_cond_signal(os_cond *c) {
 u32_t OS_cond_broadcast(os_cond *c) {
   __os_enter_critical_kernel();
   // wake all sleepers
-  if (!list_empty(&os.q_sleep)) {
+  if (!list_empty(&c->q_sleep)) {
 #if CONFIG_OS_BUMP
     os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
 #endif
