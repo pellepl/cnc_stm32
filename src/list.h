@@ -105,5 +105,13 @@ void list_sort_insert(list_t* list, void* element);
  * Moves all elements in list src to list dst, list 2 becomes empty
  */
 void list_move(list_t* l_dst, list_t* l_src);
+/**
+ * Adds an element to beginning of list
+ */
+void list_add_first(list_t* list, void* element);
+/**
+ * Moves all elements in list src to list dst, list 2 becomes empty
+ */
+void list_move_first(list_t* l_dst, list_t* l_src);
 
 #endif /*_LIST_H_*/

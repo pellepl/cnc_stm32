@@ -21,7 +21,7 @@ extern spi_dev_gen _enc28j60_spi_dev;
   SPI_DEV_GEN_sequence(&_enc28j60_spi_dev, (spi_dev_sequence *)(seq), (u8_t)(len));
 
 #define ENC28J60_IFC_TX_ETH_FRAME(data, len) \
-  ETH_SPI_send((data), (len))
+  ETH_SPI_send((data), (len), 0)
 
 // TODO
 #define ENC28J60_HAL_WAIT_US(t) \

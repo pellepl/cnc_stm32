@@ -50,7 +50,7 @@ int main(void) {
   LED_init(LED_TIMER_DIVISOR);
 #endif
   PROC_periph_init();
-#ifdef CONFIG_ADC14
+#ifdef CONFIG_ADC
   ADC_init();
 #endif
   print("\n\n\nHardware initialization done\n");
@@ -112,7 +112,7 @@ int main(void) {
 
   CLI_init();
 
-#ifdef CONFIG_ADC14
+#ifdef CONFIG_ADC
   {
     int i = 16;
     uint32_t s = 0;

@@ -16,7 +16,8 @@ u8_t ip_address[4] = ETH_IP;
 spi_dev_gen _enc28j60_spi_dev;
 
 #define ETHSPI_MAX_PKT_SIZE       400
-#define ETHSPI_TX_POOL_SIZE       4
+#define ETHSPI_TX_QUEUE_SIZE      3
+#define ETHSPI_RX_QUEUE_SIZE      3
 
 typedef struct {
   u8_t data[ETHSPI_MAX_PKT_SIZE];
@@ -31,6 +32,8 @@ static struct {
   os_mutex irq_mutex;
   os_cond tx_cond;
   os_mutex tx_mutex;
+  os_cond rx_cond;
+  os_mutex rx_mutex;
 
   u8_t rxbuf[ETHSPI_MAX_PKT_SIZE];
   u8_t txbuf[ETHSPI_MAX_PKT_SIZE];
@@ -41,14 +44,21 @@ static struct {
   bool rx_error;
   bool tx_error;
 
-  bool tx_ready;
+  volatile bool tx_ready;
 
   struct {
-    ethernet_frame frames[ETHSPI_TX_POOL_SIZE];
+    ethernet_frame frames[ETHSPI_TX_QUEUE_SIZE];
     u8_t wix;
     u8_t rix;
-    u8_t pending;
-  } tx_pool;
+    u8_t len;
+  } tx_queue;
+
+  struct {
+    ethernet_frame frames[ETHSPI_RX_QUEUE_SIZE];
+    u8_t wix;
+    u8_t rix;
+    volatile u8_t len;
+  } rx_queue;
 
   struct {
     bool query;
@@ -62,6 +72,22 @@ static struct {
 } ethspi;
 
 ///////////////////// Helper functions /////////////////////
+
+static void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
+  OS_mutex_lock(&ethspi.rx_mutex);
+  if (ethspi.rx_queue.len < ETHSPI_RX_QUEUE_SIZE) {
+    ethernet_frame *f = &ethspi.rx_queue.frames[ethspi.rx_queue.wix];
+    memcpy(f, data, len);
+    ethspi.rx_queue.wix = (ethspi.rx_queue.wix+1) % ETHSPI_RX_QUEUE_SIZE;
+    ethspi.rx_queue.len++;
+    OS_cond_broadcast(&ethspi.rx_cond);
+  } else {
+    // overflow
+    DBG(D_ETH, D_WARN, "ethspi RX user frame overflow\n");
+  }
+
+  OS_mutex_unlock(&ethspi.rx_mutex);
+}
 
 static void _eth_spi_handle_pkt() {
   u16_t rx_stat;
@@ -113,11 +139,11 @@ static void _eth_spi_handle_pkt() {
     }
   }
 
-
+/*
   // we listen on port 0xcafe
   if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
       && ethspi.rxbuf[UDP_DST_PORT_H_P] == 0xca  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xf) {
-    int payloadlen = ethspi.rxbuf[UDP_LEN_L_P]/*plen - 34 - UDP_HEADER_LEN*/;
+    int payloadlen = ethspi.rxbuf[UDP_LEN_L_P];//plen - 34 - UDP_HEADER_LEN;
     DBG(D_ETH, D_DEBUG, "ethspi UDP len:%i\n", payloadlen);
     //char *nisse = "hello wurlde";
     //make_udp_reply_from_request(ethbuf, nisse, strlen(nisse), 1200);
@@ -143,6 +169,8 @@ static void _eth_spi_handle_pkt() {
   IF_DBG(D_ETH, D_DEBUG) {
     printbuf(&ethspi.rxbuf[0], plen);
   }
+  */
+  _eth_spi_store_and_signal_rx(ethspi.rxbuf, plen);
 }
 
 static void _eth_spi_send_ethernet_frame(u8_t *packet, u16_t len) {
@@ -166,7 +194,7 @@ static void *_eth_spi_irq_thread_handler(void *a) {
   ETH_SPI_dhcp();
 #endif
 
-  bool tx_ready = TRUE;
+  bool can_send = TRUE;
   while (ethspi.active) {
     // await interrupt
     if (!enc28j60hasRxPkt()) {
@@ -209,12 +237,12 @@ static void *_eth_spi_irq_thread_handler(void *a) {
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         ethspi.tx_error = TRUE;
-        tx_ready = TRUE;
+        can_send = TRUE;
       }
       if (eir & EIR_TXIF) {
         DBG(D_ETH, D_DEBUG, "ethspi TX interrupt\n");
         enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
-        tx_ready = TRUE;
+        can_send = TRUE;
       }
       if (eir & EIR_DMAIF) {
         DBG(D_ETH, D_DEBUG, "ethspi DMA interrupt\n");
@@ -232,24 +260,26 @@ static void *_eth_spi_irq_thread_handler(void *a) {
       }
     }
 
-    if (tx_ready) {
+    // enc28j60 is free to send frames
+    if (can_send) {
       OS_mutex_lock(&ethspi.tx_mutex);
       // check if there are any queued packets
-      if (ethspi.tx_pool.pending > 0) {
-        DBG(D_ETH, D_DEBUG, "ethspi TX transmit frame %i, pending: %i\n", ethspi.tx_pool.rix, ethspi.tx_pool.pending);
-        tx_ready = FALSE;
+      if (ethspi.tx_queue.len> 0) {
+        DBG(D_ETH, D_DEBUG, "ethspi TX transmit frame %i, pending: %i\n", ethspi.tx_queue.rix, ethspi.tx_queue.len);
+        can_send = FALSE;
         ethspi.tx_ready = FALSE;
         _eth_spi_send_ethernet_frame(
-            &ethspi.tx_pool.frames[ethspi.tx_pool.rix].data[0],
-            ethspi.tx_pool.frames[ethspi.tx_pool.rix].len);
-        ethspi.tx_pool.rix = (ethspi.tx_pool.rix+1) % ETHSPI_TX_POOL_SIZE;
-        if (ethspi.tx_pool.pending == ETHSPI_TX_POOL_SIZE) {
-          // notify threads waiting that more frames now can be queued
-          OS_cond_signal(&ethspi.tx_cond);
+            &ethspi.tx_queue.frames[ethspi.tx_queue.rix].data[0],
+            ethspi.tx_queue.frames[ethspi.tx_queue.rix].len);
+        ethspi.tx_queue.rix = (ethspi.tx_queue.rix+1) % ETHSPI_TX_QUEUE_SIZE;
+        if (ethspi.tx_queue.len == ETHSPI_TX_QUEUE_SIZE) {
+          // notify threads waiting that more frames
+          // now may be queued as queue is not full anymore
+          OS_cond_broadcast(&ethspi.tx_cond);
         }
-        ethspi.tx_pool.pending--;
-      }
-      if (tx_ready) {
+        ethspi.tx_queue.len--;
+      } else {
+        // flag that we are free to send frames
         ethspi.tx_ready = TRUE;
       }
       OS_mutex_unlock(&ethspi.tx_mutex);
@@ -304,30 +334,49 @@ void ETH_SPI_dhcp() {
       );
 }
 
-void ETH_SPI_send(u8_t *data, u16_t len) {
+bool ETH_SPI_send(u8_t *data, u16_t len, time timeout) {
   // queue a packet for tx
   OS_mutex_lock(&ethspi.tx_mutex);
+  bool timed_out = FALSE;
   if (ethspi.active && ethspi.tx_ready) {
     // send directly
     ethspi.tx_ready = FALSE;
     _eth_spi_send_ethernet_frame(data, len);
   } else {
     // queue frame
-    while (ethspi.active && ethspi.tx_pool.pending >= ETHSPI_TX_POOL_SIZE) {
-      DBG(D_ETH, D_DEBUG, "ethspi TX stalled, pending: %i\n", ethspi.tx_pool.pending);
-      OS_cond_timed_wait(&ethspi.tx_cond, &ethspi.tx_mutex, 2000);
+    time alarm = SYS_get_time_ms() + timeout;
+    while (ethspi.active && ethspi.tx_queue.len >= ETHSPI_TX_QUEUE_SIZE &&
+        !(timed_out = SYS_get_time_ms() > alarm)) {
+      DBG(D_ETH, D_DEBUG, "ethspi TX stalled, pending: %i\n", ethspi.tx_queue.len);
+      OS_cond_timed_wait(&ethspi.tx_cond, &ethspi.tx_mutex, timeout);
     }
-    if (ethspi.active) {
-      ethernet_frame *pkt = &ethspi.tx_pool.frames[ethspi.tx_pool.wix];
+    if (ethspi.active && !timed_out) {
+      ethernet_frame *pkt = &ethspi.tx_queue.frames[ethspi.tx_queue.wix];
       memcpy(pkt->data, data, len);
       pkt->len = len;
-      DBG(D_ETH, D_DEBUG, "ethspi TX queued @ %i, pending: %i\n",ethspi.tx_pool.wix, ethspi.tx_pool.pending+1);
-      ethspi.tx_pool.wix = (ethspi.tx_pool.wix+1) % ETHSPI_TX_POOL_SIZE;
-      ethspi.tx_pool.pending++;
+      DBG(D_ETH, D_DEBUG, "ethspi TX queued @ %i, pending: %i\n",ethspi.tx_queue.wix, ethspi.tx_queue.len+1);
+      ethspi.tx_queue.wix = (ethspi.tx_queue.wix+1) % ETHSPI_TX_QUEUE_SIZE;
+      ethspi.tx_queue.len++;
+    } else if (!ethspi.active) {
+      timed_out = TRUE;
     }
   }
   OS_mutex_unlock(&ethspi.tx_mutex);
+  return !timed_out;
 }
+
+bool ETH_SPI_read(u8_t *data, u16_t *len, time timeout) {
+
+}
+
+bool ETH_SPI_tx_free() {
+  return ethspi.tx_ready;
+}
+
+int ETH_SPI_available() {
+  return ethspi.rx_queue.len;
+}
+
 
 void ETH_SPI_stop() {
   ethspi.active = FALSE;
@@ -359,6 +408,8 @@ void ETH_SPI_init() {
   OS_cond_init(&ethspi.irq_cond);
   OS_mutex_init(&ethspi.tx_mutex, 0);
   OS_cond_init(&ethspi.tx_cond);
+  OS_mutex_init(&ethspi.rx_mutex, 0);
+  OS_cond_init(&ethspi.rx_cond);
 
   DBG(D_ETH, D_DEBUG, "ethspi spigen init\n");
   SPI_DEV_GEN_init(
@@ -404,8 +455,8 @@ void ETH_SPI_dump() {
   print("  gateway ip:     %i.%i.%i.%i\n", ethspi.dhcp.gwip[0], ethspi.dhcp.gwip[1], ethspi.dhcp.gwip[2], ethspi.dhcp.gwip[3]);
   print("  mask:           %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
   print("  link up:        %s\n", enc28j60linkup() ? "YES": "NO");
-  print("  tx pending:     %i/%i", ethspi.tx_pool.pending, ETHSPI_TX_POOL_SIZE);
-  if (ethspi.tx_pool.pending == ETHSPI_TX_POOL_SIZE) {
+  print("  tx pending:     %i/%i", ethspi.tx_queue.len, ETHSPI_TX_QUEUE_SIZE);
+  if (ethspi.tx_queue.len == ETHSPI_TX_QUEUE_SIZE) {
     print(TEXT_NOTE(" FULL"));
   }
   print("\n");

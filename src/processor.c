@@ -65,7 +65,7 @@ static void RCC_config() {
 #endif
 #endif
 
-#ifdef CONFIG_ADC14
+#ifdef CONFIG_ADC
   RCC_ADCCLKConfig(RCC_PCLK2_Div2);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
 #endif
@@ -540,10 +540,10 @@ static void TIM_config() {
 }
 
 static void ADC_config() {
-#ifdef CONFIG_ADC14
+#ifdef CONFIG_ADC
   GPIO_InitTypeDef GPIO_InitStructure;
 
-  /* Configure PC.05 (ADC Channel15) as analog input */
+  /* Configure C05 (ADC Channel15) as analog input */
   GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
   GPIO_Init(GPIOC, &GPIO_InitStructure);

@@ -46,6 +46,10 @@ static struct os {
   os_thread *current_thread;
   // flags of current thread
   u32_t current_flags;
+#if CONFIG_OS_BUMP
+  // pointer to bumped thread
+  os_thread *bumped_thread;
+#endif
   // msp on first context switch
   void *main_msp;
   // thread running queue
@@ -188,7 +192,16 @@ u32_t __os_ctx_switch(void *sp) {
     ASSERT(*(u32_t*)(os.current_thread->stack_start - 4) == OS_STACK_START_MARKER);
     ASSERT(*(u32_t*)(os.current_thread->stack_end) == OS_STACK_END_MARKER);
 #endif
-    cand = OS_THREAD(list_next(OS_ELEMENT(os.current_thread)));
+#if CONFIG_OS_BUMP
+    if (os.bumped_thread != NULL) {
+      // if we have a bumped thread, prefer that to anything else
+      cand = os.bumped_thread;
+      os.bumped_thread = NULL;
+    } else
+#endif
+    {
+      cand = OS_THREAD(list_next(OS_ELEMENT(os.current_thread)));
+    }
   }
 
   if (cand == NULL) {
@@ -290,7 +303,10 @@ __attribute__((noreturn)) static void __os_thread_death(void) {
   os.current_thread = NULL;
   __os_exit_critical_kernel();
   (void)OS_thread_yield();
-  while(1);
+  // will never execute this
+  while (1) {
+    ASSERT(FALSE);
+  }
 }
 
 // disable systick
@@ -647,6 +663,9 @@ u32_t OS_cond_signal(os_cond *c) {
 
     // wake up first timed waiter
     t = OS_THREAD(list_first(&c->q_sleep));
+#if CONFIG_OS_BUMP
+    os.bumped_thread = t;
+#endif
     list_delete(&c->q_sleep, OS_ELEMENT(t));
     // did the condition's sleep queue become empty?
     if (list_empty(&c->q_sleep)) {
@@ -659,6 +678,9 @@ u32_t OS_cond_signal(os_cond *c) {
   // no sleepers, wake first blockee
     t = OS_THREAD(list_first(&c->q_block));
     if (t != NULL) {
+#if CONFIG_OS_BUMP
+      os.bumped_thread = t;
+#endif
       list_delete(&c->q_block, OS_ELEMENT(t));
     }
   }
@@ -676,11 +698,21 @@ u32_t OS_cond_broadcast(os_cond *c) {
   __os_enter_critical_kernel();
   // wake all sleepers
   if (!list_empty(&os.q_sleep)) {
+#if CONFIG_OS_BUMP
+    os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
+#endif
     list_move(&os.q_running, &c->q_sleep);
     //  remove condition from os sleep queue and update first_awake value.
     c->has_sleepers = FALSE;
     list_delete(&os.q_sleep, OS_ELEMENT(c));
     __os_update_first_awake();
+  } else {
+#if CONFIG_OS_BUMP
+    // if no sleepers, bump first blocked thread
+    if (!list_empty(&c->q_block)) {
+      os.bumped_thread = OS_THREAD(list_first(&c->q_block));
+    }
+#endif
   }
   // wake all blockees
   list_move(&os.q_running, &c->q_block);

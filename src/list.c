@@ -64,6 +64,44 @@ void list_insert(list_t* l, void* ve, void* ve_before) {
 	LIST_ASSERT(l->first_element != NULL);
 }
 
+void list_add_first(list_t* l, void* ve) {
+  LIST_ASSERT(ve != NULL);
+  element_t* e = (element_t*) ve;
+  if (l->first_element == NULL) {
+    l->last_element = e;
+    e->next = NULL;
+  } else {
+    l->first_element->prev = e;
+    e->next = l->first_element;
+  }
+  l->first_element = e;
+  e->prev = NULL;
+  l->length++;
+  LIST_ASSERT(l->first_element != NULL);
+}
+
+void list_move_first(list_t* l_dst, list_t* l_src) {
+  if (l_src->first_element == NULL) {
+    // moving empty list, nop
+    return;
+  }
+  if (l_dst->first_element == NULL) {
+    // moving list to empty list, copy
+    l_dst->first_element = l_src->first_element;
+    l_dst->last_element = l_src->last_element;
+    l_dst->length = l_src->length;
+  } else {
+    // hook src's last together with dst's first element
+    l_dst->first_element->prev = l_src->last_element;
+    l_src->last_element->next = l_dst->first_element;
+    l_dst->first_element = l_src->first_element;
+    l_dst->length += l_src->length;
+  }
+  l_src->length = 0;
+  l_src->first_element = NULL;
+  l_src->last_element = NULL;
+}
+
 void list_delete(list_t* l, void* ve) {
 	LIST_ASSERT(ve != NULL);
 	element_t* e = (element_t*) ve;

@@ -156,7 +156,7 @@ typedef uint16_t hw_io_pin;
 // make SPI driver use polling method, otherwise DMA requests are used
 // warning - polling method should only be used for debugging and may be
 // unstable. Do not sent multitudes of data using this flag
-#define CONFIG_SPI_POLL
+//#define CONFIG_SPI_POLL
 
 #define SPI1_MASTER_GPIO              GPIOA
 #define SPI1_MASTER_GPIO_CLK          RCC_APB2Periph_GPIOA
@@ -253,7 +253,7 @@ typedef uint16_t hw_io_pin;
 
 /** ADC **/
 
-#define CONFIG_ADC14
+#define CONFIG_ADC
 
 
 /****************************************************/
@@ -262,7 +262,7 @@ typedef uint16_t hw_io_pin;
 
 /** TICKER **/
 
-// timer frequency
+// system timer frequency
 #define SYS_MAIN_TIMER_FREQ   40000
 // system tick frequency
 #define SYS_TIMER_TICK_FREQ   1000
@@ -275,7 +275,6 @@ typedef uint16_t hw_io_pin;
 #define COMM_IMPL_STATS     1
 // use packet pool
 #define COMM_IMPL_USE_POOL  1
-
 
 /** UART **/
 
@@ -296,6 +295,11 @@ typedef uint16_t hw_io_pin;
 #define COMM_UARTS  2
 
 #define USE_COLOR_CODING
+
+/** OS **/
+
+// if enabled, signalled threads will be executed in next ctx switch
+#define CONFIG_OS_BUMP        1
 
 /** ETH **/
 #define ETH_ENC28J60_MII_POLL_GUARD   (0x10000)

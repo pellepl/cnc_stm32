@@ -13,7 +13,10 @@
 void ETH_SPI_init();
 void ETH_SPI_start();
 void ETH_SPI_dhcp();
-void ETH_SPI_send(u8_t *data, u16_t len);
+bool ETH_SPI_send(u8_t *data, u16_t len, time timeout);
+bool ETH_SPI_read(u8_t *data, u16_t *len, time timeout);
+bool ETH_SPI_tx_free();
+int ETH_SPI_available();
 void ETH_SPI_stop();
 void ETH_SPI_irq();
 void ETH_SPI_dump();
