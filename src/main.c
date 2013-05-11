@@ -26,6 +26,7 @@ static void *main_thread_func(void *a) {
   print(TEXT_NOTE("Kernel running...\n"));
   while (1) {
     if (!TASK_tick()) {
+      OS_thread_yield();
       __WFI();
     }
   }

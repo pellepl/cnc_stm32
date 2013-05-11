@@ -305,6 +305,7 @@
 #define ETH_MAC {0xc0,0xff,0xee,0xca,0xfe,0x01}
 #define ETH_IP  {192,168,0,150}
 #define ETH_INIT_DHCP
+#define ETH_STATS
 
 /** LED SHIFTER **/
 

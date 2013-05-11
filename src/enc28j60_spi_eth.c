@@ -69,6 +69,13 @@ static struct {
     u8_t dhcp_server[4];
     u8_t dns_server[4];
   } dhcp;
+
+#ifdef ETH_STATS
+  u32_t rx_packets;
+  u32_t rx_data;
+  u32_t tx_packets;
+  u32_t tx_data;
+#endif
 } ethspi;
 
 ///////////////////// Helper functions /////////////////////
@@ -96,6 +103,11 @@ static void _eth_spi_handle_pkt() {
     DBG(D_ETH, D_DEBUG, "ethspi no packet, rx_stat:%04x\n", rx_stat);
     return;
   }
+#ifdef ETH_STATS
+  ethspi.rx_packets++;
+  ethspi.rx_data += plen;
+#endif
+
   DBG(D_ETH, D_DEBUG, "ethspi got packet, len %i, rx_stat:%04x\n", plen, rx_stat);
   //printbuf(ethspi.rxbuf, MIN(64, plen));
 
@@ -186,6 +198,10 @@ static void _eth_spi_send_ethernet_frame(u8_t *packet, u16_t len) {
   enc28j60WriteBuffer(len, packet);
   // send the contents of the transmit buffer onto the network
   enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_TXRTS);
+#ifdef ETH_STATS
+  ethspi.tx_packets++;
+  ethspi.tx_data += len;
+#endif
 }
 
 static void *_eth_spi_irq_thread_handler(void *a) {
@@ -366,7 +382,24 @@ bool ETH_SPI_send(u8_t *data, u16_t len, time timeout) {
 }
 
 bool ETH_SPI_read(u8_t *data, u16_t *len, time timeout) {
-
+  OS_mutex_lock(&ethspi.rx_mutex);
+  bool timed_out = FALSE;
+  time alarm = SYS_get_time_ms() + timeout;
+  while (ethspi.active && ethspi.rx_queue.len == 0 &&
+      !(timed_out = SYS_get_time_ms() > alarm)) {
+    OS_cond_timed_wait(&ethspi.rx_cond, &ethspi.rx_mutex, timeout);
+  }
+  if (ethspi.active && !timed_out) {
+    ethernet_frame *pkt = &ethspi.rx_queue.frames[ethspi.rx_queue.rix];
+    memcpy(data, pkt->data, pkt->len);
+    *len = pkt->len;
+    ethspi.rx_queue.rix = (ethspi.rx_queue.rix+1) % ETHSPI_RX_QUEUE_SIZE;
+    ethspi.rx_queue.len--;
+  } else if (!ethspi.active) {
+    timed_out = TRUE;
+  }
+  OS_mutex_unlock(&ethspi.rx_mutex);
+  return !timed_out;
 }
 
 bool ETH_SPI_tx_free() {
@@ -465,6 +498,11 @@ void ETH_SPI_dump() {
     print(TEXT_NOTE(" FULL"));
   }
   print("\n");
+#ifdef ETH_STATS
+  print("  tx pkts:%i  sent:%i bytes\n", ethspi.tx_packets, ethspi.tx_data);
+  print("  rx pkts:%i  recd:%i bytes\n", ethspi.rx_packets, ethspi.rx_data);
+#endif
+
 #if OS_DBG_MON
   print("OS\n");
   print("  IRQ THREAD, MUTEX & COND\n");
