@@ -460,6 +460,11 @@ void ETH_SPI_dump() {
     print(TEXT_NOTE(" FULL"));
   }
   print("\n");
+  print("  rx pending:     %i/%i", ethspi.rx_queue.len, ETHSPI_RX_QUEUE_SIZE);
+  if (ethspi.rx_queue.len == ETHSPI_RX_QUEUE_SIZE) {
+    print(TEXT_NOTE(" FULL"));
+  }
+  print("\n");
 #if OS_DBG_MON
   print("OS\n");
   print("  IRQ THREAD, MUTEX & COND\n");

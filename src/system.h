@@ -64,6 +64,9 @@ void SYS_reboot(enum reboot_reason_e);
 extern void *_variadic_call(void *func, int argc, void* args);
 extern int _sqrt(int);
 
+typedef GPIO_TypeDef * hw_io_port;
+typedef uint16_t hw_io_pin;
+
 #define GPIO_enable(port, pin) (port)->BSRR = (pin)
 #define GPIO_disable(port, pin) (port)->BSRR = ((pin)<<16)
 #define GPIO_set(port, pin_ena, pin_dis) (port)->BSRR = (pin_ena) | ((pin_dis)<<16)

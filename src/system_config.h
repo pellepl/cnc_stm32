@@ -81,9 +81,6 @@
 #define FIRMWARE_SPIF_ADDRESS_DATA (FIRMWARE_SPIF_ADDRESS_BASE + sizeof(fw_upgrade_info))
 
 
-typedef GPIO_TypeDef * hw_io_port;
-typedef uint16_t hw_io_pin;
-
 /** CNC **/
 
 #ifdef CONFIG_CNC
@@ -298,8 +295,10 @@ typedef uint16_t hw_io_pin;
 
 /** OS **/
 
+// ctx switch frequency in hertz
+#define CONFIG_OS_PREEMPT_FREQ  2000
 // if enabled, signalled threads will be executed in next ctx switch
-#define CONFIG_OS_BUMP        1
+#define CONFIG_OS_BUMP          1
 
 /** ETH **/
 #define ETH_ENC28J60_MII_POLL_GUARD   (0x10000)

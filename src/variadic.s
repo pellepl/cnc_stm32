@@ -51,14 +51,14 @@ _variadic_call:
     subs	r5, r5, #1
 	bmi		.call
 
-	@ 4thd arg -> r3
+	@ 4th arg -> r3
 	add		r6, r6, #4
     ldr		r3, [r6]
     subs	r5, r5, #1
 	bmi		.call
 
 	@ following args -> stack
-	@ store needed stack size in r7
+	@ compute needed stack size in r7
 	lsl		r7, r5, #2
 	add		r7, r7, #4
 	add		r6, r6, r7

@@ -73,6 +73,7 @@ static volatile u8_t g_crit_entry = 0;
 
 u32_t __os_ctx_switch(void *sp);
 static void __os_thread_death(void);
+static void __os_update_preemption();
 static void __os_disable_preemption(void);
 static void __os_enable_preemption(void);
 
@@ -217,6 +218,10 @@ u32_t __os_ctx_switch(void *sp) {
     os.current_flags = 0;
   }
   os.current_thread = cand;
+
+  __os_update_preemption();
+
+
   asm volatile ("nop"); // compiler reorder barrier
   if (os.current_flags) {
     asm volatile (
@@ -285,6 +290,14 @@ static void __os_update_first_awake() {
     os.first_awake = OS_FOREVER;
   } else {
     os.first_awake = list_get_order(list_first(&os.q_sleep));
+  }
+}
+
+static void __os_update_preemption() {
+  if (os.q_running.length <= 1) {
+    __os_disable_preemption();
+  } else {
+    __os_enable_preemption();
   }
 }
 
@@ -537,12 +550,14 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
 #if OS_DBG_MON
       m->exited++;
 #endif
+  __os_update_preemption();
   __os_exit_critical_kernel();
   if (m->attrs & OS_MUTEX_ATTR_CRITICAL_EXIT) {
     __os_reset_critical_kernel();
   } else if (m->attrs & OS_MUTEX_ATTR_CRITICAL_IRQ) {
     __os_exit_critical_kernel();
   }
+
 
   return 0;
 }
@@ -690,6 +705,7 @@ u32_t OS_cond_signal(os_cond *c) {
   c->signalled++;
 #endif
   }
+  __os_update_preemption();
   __os_exit_critical_kernel();
   return 0;
 }
@@ -719,6 +735,7 @@ u32_t OS_cond_broadcast(os_cond *c) {
 #if OS_DBG_MON
   c->broadcasted++;
 #endif
+  __os_update_preemption();
   __os_exit_critical_kernel();
   return 0;
 }
@@ -749,8 +766,7 @@ void OS_svc_3(void *arg, ...) {
 }
 
 void OS_init(void) {
-  u32_t ticks = SystemCoreClock/8;
-  ticks /= 1024;
+  const u32_t ticks = (SystemCoreClock/8) / CONFIG_OS_PREEMPT_FREQ;
   memset(&os, 0, sizeof(os));
   list_init(&os.q_running);
   list_init(&os.q_sleep);
@@ -796,7 +812,7 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
       used_entries++;
     }
     u32_t perc = 100 - ((100 * used_entries) / ((t->stack_end - t->stack_start)/sizeof(u32_t)));
-    print("  used:%i", perc);
+    print("  used:%i%", perc);
     if (perc > 97) {
       print(TEXT_BAD(" ALMOST FULL"));
     }
