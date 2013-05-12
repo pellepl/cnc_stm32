@@ -54,6 +54,7 @@ void SYS_assert(const char* file, int line);
 void SYS_hardsleep_ms(u32_t ms);
 u32_t SYS_build_number();
 u32_t SYS_build_date();
+void SYS_dump_trace();
 void SYS_reboot(enum reboot_reason_e);
 
 #define memcpy(d,s,n) __builtin_memcpy((d),(s),(n))

@@ -278,8 +278,10 @@ void UART_assure_tx(uart *u, bool on) {
   u->assure_tx = on;
 }
 
-void UART_sync_tx(uart *u, bool on) {
+bool UART_sync_tx(uart *u, bool on) {
+  bool old = u->sync_tx;
   u->sync_tx = on;
+  return old;
 }
 
 #if UART_RECORD_IRQ_TYPE

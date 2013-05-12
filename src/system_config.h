@@ -332,6 +332,10 @@
 // disable all debug output
 //#define DBG_OFF
 
+// enable or disable tracing
+#define DBG_TRACE_MON
+#define TRACE_SIZE            (256)
+
 // enable debug monitor for os
 #define OS_DBG_MON            1
 

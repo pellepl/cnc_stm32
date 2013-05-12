@@ -97,34 +97,44 @@ void DebugMon_Handler(void)
 #ifdef CONFIG_UART1
 void USART1_IRQHandler(void)
 {
+  TRACE_IRQ_ENTER(1);
   UART_irq(&__uart_vec[0]);
+  TRACE_IRQ_EXIT(1);
 }
 #endif
 
 #ifdef CONFIG_UART2
 void USART2_IRQHandler(void)
 {
+  //TRACE_IRQ_ENTER(2);
   UART_irq(&__uart_vec[1]);
+  //TRACE_IRQ_EXIT(2);
 }
 #endif
 
 #ifdef CONFIG_UART3
 void USART3_IRQHandler(void)
 {
+  TRACE_IRQ_ENTER(3);
   UART_irq(&__uart_vec[2]);
+  TRACE_IRQ_EXIT(3);
 }
 #endif
 
 #ifdef CONFIG_UART4
 void UART4_IRQHandler(void)
 {
+  TRACE_IRQ_ENTER(4);
   UART_irq(&__uart_vec[3]);
+  TRACE_IRQ_EXIT(4);
 }
 #endif
 
 void TIM2_IRQHandler(void)
 {
+  //TRACE_IRQ_ENTER(5);
   TIMER_irq();
+  //TRACE_IRQ_EXIT(5);
 }
 
 #include "miniutils.h"
@@ -132,45 +142,63 @@ void TIM2_IRQHandler(void)
 #ifdef CONFIG_SPI
 void DMA1_Channel2_IRQHandler() {
   // DMA1 Channel 2 SPI1 RX
+  TRACE_IRQ_ENTER(6);
   SPI_irq(&__spi_bus_vec[0]);
+  TRACE_IRQ_EXIT(6);
 }
 void DMA1_Channel3_IRQHandler() {
   // DMA1 Channel 3 SPI1 TX
+  TRACE_IRQ_ENTER(7);
   SPI_irq(&__spi_bus_vec[0]);
+  TRACE_IRQ_EXIT(7);
 }
 void DMA1_Channel4_IRQHandler() {
   // DMA1 Channel 4 SPI2 RX
+  TRACE_IRQ_ENTER(8);
   SPI_irq(&__spi_bus_vec[1]);
+  TRACE_IRQ_EXIT(8);
 }
 void DMA1_Channel5_IRQHandler() {
   // DMA1 Channel 5 SPI2 TX
+  TRACE_IRQ_ENTER(9);
   SPI_irq(&__spi_bus_vec[1]);
+  TRACE_IRQ_EXIT(9);
 }
 #endif
 
 #ifdef CONFIG_ETHSPI
 void EXTI4_IRQHandler(void)
 {
+  TRACE_IRQ_ENTER(10);
   ETH_SPI_irq();
+  TRACE_IRQ_EXIT(10);
 }
 #endif
 
 #ifdef OS_DUMP_IRQ
 void EXTI2_IRQHandler(void)
 {
+  TRACE_IRQ_ENTER(11);
   OS_DBG_dump_irq();
+  SYS_dump_trace();
+
+  TRACE_IRQ_EXIT(11);
 }
 #endif
 
 
 void PendSV_Handler(void)
 {
+  TRACE_IRQ_ENTER(12);
   __os_pendsv();
+  TRACE_IRQ_EXIT(12);
 }
 
 void SysTick_Handler(void)
 {
+  TRACE_IRQ_ENTER(13);
   __os_systick();
+  TRACE_IRQ_EXIT(13);
 }
 
 

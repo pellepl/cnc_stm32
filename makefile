@@ -107,6 +107,8 @@ FILES = 	processor.c \
 			cnc_control.c \
 			cnc_comm.c \
 			comm_impl.c \
+			comm_impl_uart.c \
+			comm_impl_udp.c \
 			miniutils.c \
 			taskq.c \
 			heap.c \

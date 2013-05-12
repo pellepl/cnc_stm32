@@ -319,10 +319,10 @@ static void CNC_COMM_handle_comm_dead(s32_t err) {
     }
     connected = FALSE;
   }
-  COMM_next_channel();
+  COMM_UART_next_channel();
 #else
   if (!connected) {
-    COMM_next_channel();
+    COMM_UART_next_channel();
   }
 #endif
 }
@@ -371,6 +371,8 @@ static void cnc_pos_timer_task(u32_t ignore, void *ignore_more) {
 }
 
 static void cnc_alive_timer_task(u32_t ignore, void *ignore_more) {
+#if 0
+  // TODO PETER
   u8_t buf[2];
   buf[0] = COMM_PROTOCOL_CNC_ID;
   buf[1] = COMM_PROTOCOL_ALIVE;
@@ -380,6 +382,7 @@ static void cnc_alive_timer_task(u32_t ignore, void *ignore_more) {
   } else {
     CNC_COMM_handle_comm_dead(res);
   }
+#endif
   COMM_FILE_watchdog();
 }
 

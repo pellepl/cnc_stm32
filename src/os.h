@@ -38,6 +38,7 @@ typedef struct os_thread_t {
 } os_thread;
 
 typedef struct os_mutex_t {
+  u32_t id;
   u32_t lock;
   u32_t attrs;
   os_thread *owner;
@@ -50,6 +51,7 @@ typedef struct os_mutex_t {
 
 typedef struct os_cond_t {
   os_object this;
+  u32_t id;
   os_mutex *mutex;
   list_t q_block;
   list_t q_sleep;
@@ -106,6 +108,8 @@ void __os_exit_critical_kernel(void);
 void __os_systick(void);
 void __os_pendsv(void);
 void __os_time_tick(time now);
+
+os_thread *OS_DBG_get_thread_by_id(u32_t id);
 
 #if OS_DBG_MON
 bool OS_DBG_print_thread(os_thread *t, bool detail, int indent);

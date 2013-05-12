@@ -19,6 +19,8 @@
 #define _STACK_USAGE_MARK (0xea)
 #define _STACK_USAGE_MARK_32 ((_STACK_USAGE_MARK << 24) | (_STACK_USAGE_MARK << 16) | (_STACK_USAGE_MARK << 8) | _STACK_USAGE_MARK)
 
+#define PENDING_CTX_SWITCH SCB->ICSR |= SCB_ICSR_PENDSVSET
+
 typedef struct {
   u32_t r0;
   u32_t r1;
@@ -57,7 +59,7 @@ static struct os {
   // thread sleeping queue
   list_t q_sleep;
   time first_awake;
-  bool preemption;
+  volatile bool preemption;
 #if OS_DBG_MON
   u8_t thread_peer_ix;
   os_thread *thread_peers[OS_THREAD_PEERS];
@@ -68,7 +70,9 @@ static struct os {
 #endif
 } os;
 
-static volatile u32_t g_id = 0;
+static volatile u32_t g_thr_id = 0;
+static volatile u32_t g_mutex_id = 0;
+static volatile u32_t g_cond_id = 0;
 static volatile u8_t g_crit_entry = 0;
 
 u32_t __os_ctx_switch(void *sp);
@@ -99,7 +103,7 @@ void __os_svc_handler(u32_t *args) {
   if (svc_nbr == 1) {
 // TODO
 //    if (arg0 == OS_SVC_YIELD) {
-      SCB->ICSR |= SCB_ICSR_PENDSVSET;
+      PENDING_CTX_SWITCH;
       return;
 //    }
   }
@@ -109,7 +113,7 @@ void __os_svc_handler(u32_t *args) {
 // Called from SysTick_Handler in stm32f103x_it.c
 void __os_systick(void) {
   // assert pendsv
-  SCB->ICSR |= SCB_ICSR_PENDSVSET;
+  PENDING_CTX_SWITCH;
 }
 
 // Called from PendSV_Handler in stm32f103x_it.c
@@ -185,6 +189,7 @@ u32_t __os_ctx_switch(void *sp) {
 
   __os_enter_critical_kernel();
   if (os.current_thread != NULL) {
+    TRACE_OS_CTX_LEAVE(os.current_thread);
     // save current psp to current thread
     if (os.current_thread->flags & OS_THREAD_FLAG_ALIVE) {
       os.current_thread->sp = sp;
@@ -213,9 +218,11 @@ u32_t __os_ctx_switch(void *sp) {
   if (cand != NULL) {
     // got a candidate, setup context
     os.current_flags = cand->flags;
+    TRACE_OS_CTX_ENTER(cand);
   } else {
     // no candidate
     os.current_flags = 0;
+    TRACE_OS_SLEEP(list_count(&os.q_running));
   }
   os.current_thread = cand;
 
@@ -250,6 +257,7 @@ static void __os_sleepers_update(list_t *q, time now) {
       // it was a thread, simply move from sleeping to running
       os_thread *t = OS_THREAD(e);
       __os_enter_critical_kernel();
+      TRACE_OS_TIMWAKED(t);
       list_delete(q, e);
       list_add(&os.q_running, e);
       list_set_order(e, OS_FOREVER);
@@ -305,6 +313,10 @@ void __os_time_tick(time now) {
   if (now >= os.first_awake) {
     __os_sleepers_update(&os.q_sleep, now);
     __os_update_first_awake();
+    if (!os.preemption) {
+      PENDING_CTX_SWITCH;
+    }
+    __os_update_preemption();
   }
 }
 
@@ -324,14 +336,20 @@ __attribute__((noreturn)) static void __os_thread_death(void) {
 
 // disable systick
 static inline void __os_disable_preemption(void) {
-  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+  if (os.preemption) {
+    TRACE_OS_PREEMPTION(0);
+  }
   os.preemption = FALSE;
+  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
 }
 
 // enable systick
 static inline void __os_enable_preemption(void) {
-  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+  if (!os.preemption) {
+    TRACE_OS_PREEMPTION(1);
+  }
   os.preemption = TRUE;
+  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
 }
 
 static bool OS_enter_critical() {
@@ -353,6 +371,7 @@ inline void __os_enter_critical_kernel(void) {
     print("enter critical from user!!\n");
   }
   __disable_irq();
+  TRACE_IRQ_OFF(g_crit_entry);
   g_crit_entry++;
 }
 
@@ -360,6 +379,7 @@ inline void __os_enter_critical_kernel(void) {
 inline void __os_exit_critical_kernel(void) {
   ASSERT(g_crit_entry > 0);
   g_crit_entry--;
+  TRACE_IRQ_ON(g_crit_entry);
   if (g_crit_entry == 0) {
     __enable_irq();
   }
@@ -411,7 +431,7 @@ u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *a
 
   t->this.type = OS_THREAD;
 
-  t->id = ++g_id;
+  t->id = ++g_thr_id;
   t->name = name;
 
   list_init(&t->q_join);
@@ -446,6 +466,7 @@ u32_t OS_thread_id(os_thread *t) {
 
 u32_t OS_thread_yield(void) {
   ASSERT(g_crit_entry == 0);
+  TRACE_OS_YIELD(OS_thread_self());
   OS_svc_1((void*)OS_SVC_YIELD,0,0,0);
   return OS_thread_self()->ret_val;
 }
@@ -463,6 +484,7 @@ void OS_thread_join(os_thread *t) {
 }
 
 u32_t OS_mutex_init(os_mutex *m, u32_t attrs) {
+  m->id = ++g_mutex_id;
   m->lock = 0;
   m->owner = 0;
   m->attrs = attrs;
@@ -495,6 +517,7 @@ static u32_t OS_mutex_lock_internal(os_mutex *m) {
   ASSERT(m->owner != self);
   u32_t res = 0;
 
+  TRACE_OS_MUTLOCK(m);
   do {
     taken = TRUE;
     u32_t v;
@@ -511,6 +534,7 @@ static u32_t OS_mutex_lock_internal(os_mutex *m) {
     if (!taken) {
       // mutex already busy
       __os_enter_critical_kernel();
+      TRACE_OS_MUT_WAITLOCK(self);
       list_delete(&os.q_running, OS_ELEMENT(self));
       list_add(&m->q_block, OS_ELEMENT(self));
       __os_exit_critical_kernel();
@@ -518,6 +542,7 @@ static u32_t OS_mutex_lock_internal(os_mutex *m) {
     } else {
       // mutex taken
       __os_enter_critical_kernel();
+      TRACE_OS_MUT_ACQLOCK(self);
       m->owner = self;
 #if OS_DBG_MON
       m->entered++;
@@ -542,6 +567,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
 
   // reinsert all waiting threads to running queue
   __os_enter_critical_kernel();
+  TRACE_OS_MUTUNLOCK(m);
   list_move(&os.q_running, &m->q_block);
   // reset mutex
   m->lock = 0;
@@ -574,6 +600,8 @@ bool OS_mutex_try_lock(os_mutex *m) {
 
   ASSERT(m->owner != self);
 
+  TRACE_OS_MUTLOCK(m);
+
   // try setting mutex flag to busy
   do {
     u32_t v;
@@ -590,12 +618,14 @@ bool OS_mutex_try_lock(os_mutex *m) {
     return FALSE;
   }
 
+  TRACE_OS_MUT_ACQLOCK(m);
   m->owner = self;
 
   return TRUE;
 }
 
 u32_t OS_cond_init(os_cond *c) {
+  c->id = ++g_cond_id;
   c->this.type = OS_COND;
   list_set_order(OS_ELEMENT(c), OS_FOREVER);
   list_init(&c->q_block);
@@ -618,6 +648,7 @@ u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
   ASSERT((void*)c >= RAM_BEGIN);
   ASSERT((void*)c < RAM_END);
   __os_enter_critical_kernel();
+  TRACE_OS_CONDWAIT(c);
   (void)OS_mutex_unlock_internal(m);
   list_delete(&os.q_running, OS_ELEMENT(self));
   list_add(&c->q_block, OS_ELEMENT(self));
@@ -637,6 +668,10 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
   os_thread *self = OS_thread_self();
   self->ret_val = FALSE;
   __os_enter_critical_kernel();
+
+  //ASSERT(strcmp("main_kernel", self->name) != 0);
+
+  TRACE_OS_CONDTIMWAIT(c);
 
   (void)OS_mutex_unlock_internal(m);
 
@@ -673,11 +708,14 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
 u32_t OS_cond_signal(os_cond *c) {
   os_thread *t;
   __os_enter_critical_kernel();
+  TRACE_OS_CONDSIG(c);
+
   // first, check if there are sleepers
   if (!list_empty(&c->q_sleep)) {
 
     // wake up first timed waiter
     t = OS_THREAD(list_first(&c->q_sleep));
+    TRACE_OS_SIGWAKED(t);
 #if CONFIG_OS_BUMP
     os.bumped_thread = t;
 #endif
@@ -693,6 +731,7 @@ u32_t OS_cond_signal(os_cond *c) {
   // no sleepers, wake first blockee
     t = OS_THREAD(list_first(&c->q_block));
     if (t != NULL) {
+      TRACE_OS_SIGWAKED(t);
 #if CONFIG_OS_BUMP
       os.bumped_thread = t;
 #endif
@@ -707,28 +746,36 @@ u32_t OS_cond_signal(os_cond *c) {
   }
   __os_update_preemption();
   __os_exit_critical_kernel();
+  if (!os.preemption) {
+    PENDING_CTX_SWITCH;
+  }
+
   return 0;
 }
 
 u32_t OS_cond_broadcast(os_cond *c) {
   __os_enter_critical_kernel();
+  TRACE_OS_CONDBROAD(c);
+
   // wake all sleepers
   if (!list_empty(&c->q_sleep)) {
 #if CONFIG_OS_BUMP
     os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
 #endif
+    TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_sleep)));
     list_move(&os.q_running, &c->q_sleep);
     //  remove condition from os sleep queue and update first_awake value.
     c->has_sleepers = FALSE;
     list_delete(&os.q_sleep, OS_ELEMENT(c));
     __os_update_first_awake();
   } else {
-#if CONFIG_OS_BUMP
     // if no sleepers, bump first blocked thread
     if (!list_empty(&c->q_block)) {
+#if CONFIG_OS_BUMP
       os.bumped_thread = OS_THREAD(list_first(&c->q_block));
-    }
 #endif
+      TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_block)));
+    }
   }
   // wake all blockees
   list_move(&os.q_running, &c->q_block);
@@ -737,6 +784,9 @@ u32_t OS_cond_broadcast(os_cond *c) {
 #endif
   __os_update_preemption();
   __os_exit_critical_kernel();
+  if (!os.preemption) {
+    PENDING_CTX_SWITCH;
+  }
   return 0;
 }
 
@@ -786,8 +836,8 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
   char tab[32];
   memset(tab, ' ', sizeof(tab));
   tab[indent] = 0;
-  print("%sthread addr:%08x  id:%04i  name:%s  order:%08x\n", tab,
-      t, t->id, t->name == NULL ? "<n/a>" : t->name, t->this.e.sort_order);
+  print("%sthread id:%04x  addr:%08x  name:%s  order:%08x\n", tab,
+      t->id, t, t->name == NULL ? "<n/a>" : t->name, t->this.e.sort_order);
   if (!detail) return TRUE;
   print("%s       func:%08x  flags:%08x\n", tab,
       t->func, t->flags);
@@ -813,8 +863,10 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
     }
     u32_t perc = 100 - ((100 * used_entries) / ((t->stack_end - t->stack_start)/sizeof(u32_t)));
     print("  used:%i%", perc);
-    if (perc > 97) {
-      print(TEXT_BAD(" ALMOST FULL"));
+    if (perc == 100) {
+      print(TEXT_BAD(" FULL"));
+    } else if (perc > 90) {
+      print(TEXT_NOTE(" ALMOST FULL"));
     }
   }
 #endif
@@ -867,7 +919,7 @@ bool OS_DBG_print_mutex(os_mutex *m, bool detail, int indent) {
   char tab[32];
   memset(tab, ' ', sizeof(tab));
   tab[indent] = 0;
-  print("%smutex  addr:%08x  lock:%08x  attr:%08x\n", tab, m, m->lock, m->attrs);
+  print("%smutex  id:%04x  addr:%08x  lock:%08x  attr:%08x\n", tab, m->id, m, m->lock, m->attrs);
   if (!detail) return TRUE;
   print("%s       owner: ", tab);
   if (!OS_DBG_print_thread(m->owner, FALSE, indent+2)) {
@@ -895,8 +947,8 @@ bool OS_DBG_print_cond(os_cond *c, bool detail, int indent) {
   char tab[32];
   memset(tab, ' ', sizeof(tab));
   tab[indent] = 0;
-  print("%scond   addr:%08x  sleepers:%s  order:%08x\n", tab,
-      c,  c->has_sleepers? "YES":"NO ", c->this.e.sort_order);
+  print("%scond   id:%04x  addr:%08x  sleepers:%s  order:%08x\n", tab,
+      c->id, c,  c->has_sleepers? "YES":"NO ", c->this.e.sort_order);
   print("%s       mutex: ", tab);
   if (!OS_DBG_print_mutex(c->mutex, FALSE, indent + 2)) {
     print("\n");
@@ -927,10 +979,11 @@ void OS_DBG_list_all(bool previous_preempt) {
   print("OS INFO\n-------\n");
   print("  Scheduled threads: %i\n", list_count(&os.q_running));
   print("  Sleeping entries:  %i\n", list_count(&os.q_sleep));
-  print("  Spawned threads:   %i\n", g_id);
+  print("  Spawned threads:   %i\n", g_thr_id);
   print("  Critical depth:    %i\n", g_crit_entry);
   print("  Preemption:        %s\n", previous_preempt ? "ON":"OFF");
-  print("  First awake:       %08x (%08x in future)\n", os.first_awake, os.first_awake - SYS_get_tick());
+  print("  Now:               %i\n", SYS_get_time_ms());
+  print("  First awake:       %i (%i in future)\n", os.first_awake, os.first_awake - SYS_get_time_ms());
   OS_DBG_list_threads();
   OS_DBG_list_mutexes();
   OS_DBG_list_conds();
@@ -952,5 +1005,26 @@ void OS_DBG_dump_irq() {
 
 #endif
 
+os_thread *OS_DBG_get_thread_by_id(u32_t id) {
+#if OS_DBG_MON
+  int i;
+  for (i = 0; i < OS_THREAD_PEERS; i++) {
+    if (os.thread_peers[i] != NULL && os.thread_peers[i]->id == id) {
+      return os.thread_peers[i];
+    }
+  }
+  return NULL;
+#else
+  return NULL;
+#endif
+}
+
+os_thread **OS_DBG_get_thread_peers() {
+#if OS_DBG_MON
+  return os.thread_peers;
+#else
+  return NULL;
+#endif
+}
 #endif // OS_DBG_MON
 

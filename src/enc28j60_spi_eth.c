@@ -16,8 +16,8 @@ u8_t ip_address[4] = ETH_IP;
 spi_dev_gen _enc28j60_spi_dev;
 
 #define ETHSPI_MAX_PKT_SIZE       400
-#define ETHSPI_TX_QUEUE_SIZE      3
-#define ETHSPI_RX_QUEUE_SIZE      3
+#define ETHSPI_TX_QUEUE_SIZE      6
+#define ETHSPI_RX_QUEUE_SIZE      4
 
 typedef struct {
   u8_t data[ETHSPI_MAX_PKT_SIZE];
@@ -57,7 +57,7 @@ static struct {
     ethernet_frame frames[ETHSPI_RX_QUEUE_SIZE];
     u8_t wix;
     u8_t rix;
-    volatile u8_t len;
+    volatile u8_t len; // volatiled as being read out on rx_available
   } rx_queue;
 
   struct {
@@ -84,14 +84,15 @@ static void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
   OS_mutex_lock(&ethspi.rx_mutex);
   if (ethspi.rx_queue.len < ETHSPI_RX_QUEUE_SIZE) {
     ethernet_frame *f = &ethspi.rx_queue.frames[ethspi.rx_queue.wix];
-    memcpy(f, data, len);
+    memcpy(f->data, data, len);
+    f->len = len;
     ethspi.rx_queue.wix = (ethspi.rx_queue.wix+1) % ETHSPI_RX_QUEUE_SIZE;
     ethspi.rx_queue.len++;
-    OS_cond_broadcast(&ethspi.rx_cond);
   } else {
     // overflow
     DBG(D_ETH, D_WARN, "ethspi RX user frame overflow\n");
   }
+  OS_cond_broadcast(&ethspi.rx_cond);
 
   OS_mutex_unlock(&ethspi.rx_mutex);
 }
@@ -410,6 +411,15 @@ int ETH_SPI_available() {
   return ethspi.rx_queue.len;
 }
 
+eth_state ETH_SPI_state() {
+  if (!ethspi.active) {
+    return ETH_DOWN;
+  } else if (ethspi.dhcp.query) {
+    return ETH_QUERY_IP;
+  } else {
+    return ETH_UP;
+  }
+}
 
 void ETH_SPI_stop() {
   ethspi.active = FALSE;
@@ -487,6 +497,7 @@ void ETH_SPI_dump() {
   print("  local ip:       %i.%i.%i.%i\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
   print("  gateway ip:     %i.%i.%i.%i\n", ethspi.dhcp.gwip[0], ethspi.dhcp.gwip[1], ethspi.dhcp.gwip[2], ethspi.dhcp.gwip[3]);
   print("  mask:           %i.%i.%i.%i\n", ethspi.dhcp.mask[0], ethspi.dhcp.mask[1], ethspi.dhcp.mask[2], ethspi.dhcp.mask[3]);
+  if (!ethspi.active) return;
   print("  link up:        %s\n", enc28j60linkup() ? "YES": "NO");
   print("  tx pending:     %i/%i", ethspi.tx_queue.len, ETHSPI_TX_QUEUE_SIZE);
   if (ethspi.tx_queue.len == ETHSPI_TX_QUEUE_SIZE) {
@@ -512,6 +523,9 @@ void ETH_SPI_dump() {
   print("  TX MUTEX & COND\n");
   OS_DBG_print_mutex(&ethspi.tx_mutex, TRUE, 2);
   OS_DBG_print_cond(&ethspi.tx_cond, TRUE, 2);
+  print("  RX MUTEX & COND\n");
+  OS_DBG_print_mutex(&ethspi.rx_mutex, TRUE, 2);
+  OS_DBG_print_cond(&ethspi.rx_cond, TRUE, 2);
 #endif
   print("HW\n");
   print("  chip rev:       %02x\n", enc28j60getrev());

@@ -24,6 +24,17 @@ os_thread main_thread;
 
 static void *main_thread_func(void *a) {
   print(TEXT_NOTE("Kernel running...\n"));
+
+
+  COMM_UART_init(_UART(COMMIN));
+  COMM_UDP_init();
+  COMM_init();
+  // TODO PETER COMM_set_stack(COMM_UART_get_comm());
+  COMM_set_stack(COMM_UDP_get_comm());
+#ifdef CONFIG_CNC
+  CNC_COMM_init();
+#endif
+
   while (1) {
     if (!TASK_tick()) {
       OS_thread_yield();
@@ -39,6 +50,7 @@ static void main_spi_cb(spi_flash_dev *dev, int result) {
 
 int main(void) {
   s32_t res;
+  __disable_irq();
   PROC_base_init();
   SYS_init();
   UART_init();
@@ -54,6 +66,7 @@ int main(void) {
 #ifdef CONFIG_ADC
   ADC_init();
 #endif
+  __enable_irq();
   print("\n\n\nHardware initialization done\n");
 
   print("Shared memory on 0x%08x\n", SHARED_MEMORY_ADDRESS);
@@ -96,11 +109,6 @@ int main(void) {
   COMM_FILE_init();
 
 #endif
-  COMM_init(_UART(COMMIN));
-#ifdef CONFIG_CNC
-  CNC_COMM_init();
-#endif
-
   print("Stack 0x%08x -- 0x%08x\n", STACK_START, STACK_END);
 
   print("Subsystem initialization done\n");
@@ -134,7 +142,9 @@ int main(void) {
       (void *)(STACK_START+4), __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA,
       "main_kernel");
 
+
   while(1) {
+    print("z");
     SYS_hardsleep_ms(500);
 #if OS_DBG_MON
     while (UART_rx_available(_UART(STDIN))) {
@@ -276,6 +286,7 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
     print("VECTBL: HardFlt vector fetch failed\n");
   }
 
+  SYS_dump_trace();
 
   while(1);
 }
