@@ -114,6 +114,7 @@ void SYS_assert(const char* file, int line) {
   UART_tx_flush(_UART(STDOUT));
   const int ASSERT_BLINK = 0x100000;
   volatile int a;
+  __asm__ volatile ("bkpt #0\n");
   while (1) {
     a = ASSERT_BLINK;
     while (a--) {
@@ -216,11 +217,13 @@ void SYS_dump_trace() {
     switch (op) {
     case _TRC_OP_OS_CTX_LEAVE:
     case _TRC_OP_OS_CTX_ENTER:
+    case _TRC_OP_OS_CREATE:
     case _TRC_OP_OS_YIELD:
     case _TRC_OP_OS_MUTACQ_LOCK:
     case _TRC_OP_OS_MUTWAIT_LOCK:
     case _TRC_OP_OS_SIGWAKED:
     case _TRC_OP_OS_TIMWAKED:
+    case _TRC_OP_OS_DEAD:
       t = OS_DBG_get_thread_by_id(arg);
       if (t != NULL) {
         print("%s  %s\n", msg_text[op], t->name);

@@ -71,14 +71,46 @@ static struct {
   } dhcp;
 
 #ifdef ETH_STATS
-  u32_t rx_packets;
+  u32_t rx_frames;
   u32_t rx_data;
-  u32_t tx_packets;
+  u32_t tx_frames;
   u32_t tx_data;
 #endif
 } ethspi;
 
 ///////////////////// Helper functions /////////////////////
+
+static void _eth_spi_configure() {
+  DBG(D_ETH, D_DEBUG, "ethspi spigen init\n");
+  SPI_DEV_GEN_init(
+      &_enc28j60_spi_dev,
+      SPIDEV_CONFIG_CPHA_1E |
+      SPIDEV_CONFIG_CPOL_LO |
+      SPIDEV_CONFIG_FBIT_MSB |
+      SPIDEV_CONFIG_SPEED_9M,
+      _SPI_BUS(1),
+      SPI_ETH_GPIO_PORT, SPI_ETH_GPIO_PIN);
+  DBG(D_ETH, D_DEBUG, "ethspi spigen open\n");
+  SPI_DEV_GEN_open(&_enc28j60_spi_dev);
+  DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init\n");
+  enc28j60Init(mac_address, EIE_PKTIE | EIE_TXIE | EIE_RXERIE | EIE_TXERIE);
+
+  DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init done, chip rev %02x\n", enc28j60getrev());
+  DBG(D_ETH, D_DEBUG, "ethspi mac readback: %02x:%02x:%02x:%02x:%02x:%02x\n",
+      enc28j60Read(MAADR5), enc28j60Read(MAADR4), enc28j60Read(MAADR3),
+      enc28j60Read(MAADR2), enc28j60Read(MAADR1), enc28j60Read(MAADR0)
+      );
+
+  SYS_hardsleep_ms(20);
+  enc28j60PhyWrite(PHLCON,0x476);
+  SYS_hardsleep_ms(20);
+
+  // init eth/ip layer
+  init_ip_arp_udp_tcp(mac_address, ip_address, 80);
+
+  DBG(D_ETH, D_INFO, "ethspi setup finished, ip %i.%i.%i.%i @ mac %02x.%02x.%02x.%02x.%02x.%02x\n",
+      ip_address[0], ip_address[1], ip_address[2], ip_address[3], mac_address[0], mac_address[1], mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
+}
 
 static void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
   OS_mutex_lock(&ethspi.rx_mutex);
@@ -97,19 +129,19 @@ static void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
   OS_mutex_unlock(&ethspi.rx_mutex);
 }
 
-static void _eth_spi_handle_pkt() {
+static void _eth_spi_handle_frame() {
   u16_t rx_stat;
   int plen = enc28j60PacketReceive(ETHSPI_MAX_PKT_SIZE, ethspi.rxbuf, &rx_stat);
   if (plen == 0) {
-    DBG(D_ETH, D_DEBUG, "ethspi no packet, rx_stat:%04x\n", rx_stat);
+    DBG(D_ETH, D_DEBUG, "ethspi no frame, rx_stat:%04x\n", rx_stat);
     return;
   }
 #ifdef ETH_STATS
-  ethspi.rx_packets++;
+  ethspi.rx_frames++;
   ethspi.rx_data += plen;
 #endif
 
-  DBG(D_ETH, D_DEBUG, "ethspi got packet, len %i, rx_stat:%04x\n", plen, rx_stat);
+  DBG(D_ETH, D_DEBUG, "ethspi got frame, len %i, rx_stat:%04x\n", plen, rx_stat);
   //printbuf(ethspi.rxbuf, MIN(64, plen));
 
   // doing dhcp, do not allow anything else right now
@@ -127,6 +159,7 @@ static void _eth_spi_handle_pkt() {
       DBG(D_ETH, D_DEBUG, "ethspi DHCP dns  %i.%i.%i.%i\n", ethspi.dhcp.dns_server[0], ethspi.dhcp.dns_server[1], ethspi.dhcp.dns_server[2], ethspi.dhcp.dns_server[3]);
       memcpy(ip_address, ethspi.dhcp.ipaddr, 4);
       set_ip(ethspi.dhcp.ipaddr);
+      client_set_gwip(ethspi.dhcp.gwip);
     }
     return;
   }
@@ -139,20 +172,20 @@ static void _eth_spi_handle_pkt() {
     return;
   }
 
-  // check if ip packets (icmp or udp) are for us or broadcast:
+  // check if ip frames (icmp or udp) are for us or broadcast:
   if (eth_type_is_ip_and_broadcast(ethspi.rxbuf, plen) == 0) {
     if (eth_type_is_ip_and_my_ip(ethspi.rxbuf, plen) == 0) {
       return;
     }
     if (ethspi.rxbuf[IP_PROTO_P]==IP_PROTO_ICMP_V &&
         ethspi.rxbuf[ICMP_TYPE_P]==ICMP_TYPE_ECHOREQUEST_V){
-      // a ping packet, let's send pong
+      // a ping frame, let's send pong
       make_echo_reply_from_request(ethspi.rxbuf, plen);
       return;
     }
   }
 
-/*
+#if 0
   // we listen on port 0xcafe
   if (ethspi.rxbuf[IP_PROTO_P] == IP_PROTO_UDP_V
       && ethspi.rxbuf[UDP_DST_PORT_H_P] == 0xca  && ethspi.rxbuf[UDP_DST_PORT_L_P] == 0xf) {
@@ -182,31 +215,32 @@ static void _eth_spi_handle_pkt() {
   IF_DBG(D_ETH, D_DEBUG) {
     printbuf(&ethspi.rxbuf[0], plen);
   }
-  */
+#endif
   _eth_spi_store_and_signal_rx(ethspi.rxbuf, plen);
 }
 
-static void _eth_spi_send_ethernet_frame(u8_t *packet, u16_t len) {
+static void _eth_spi_send_ethernet_frame(u8_t *frame, u16_t len) {
   // Set the write pointer to start of transmit buffer area
   enc28j60Write(EWRPTL, TXSTART_INIT & 0xFF);
   enc28j60Write(EWRPTH, TXSTART_INIT >> 8);
-  // Set the TXND pointer to correspond to the packet size given
+  // Set the TXND pointer to correspond to the frame size given
   enc28j60Write(ETXNDL, (TXSTART_INIT + len) & 0xFF);
   enc28j60Write(ETXNDH, (TXSTART_INIT + len) >> 8);
-  // write per-packet control byte (0x00 means use macon3 settings)
+  // write per-frame control byte (0x00 means use macon3 settings)
   enc28j60WriteOp(ENC28J60_WRITE_BUF_MEM, 0, 0x00);
-  // copy the packet into the transmit buffer
-  enc28j60WriteBuffer(len, packet);
+  // copy the frame into the transmit buffer
+  enc28j60WriteBuffer(len, frame);
   // send the contents of the transmit buffer onto the network
   enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_TXRTS);
 #ifdef ETH_STATS
-  ethspi.tx_packets++;
+  ethspi.tx_frames++;
   ethspi.tx_data += len;
 #endif
 }
 
 static void *_eth_spi_irq_thread_handler(void *a) {
   DBG(D_ETH, D_INFO, "ethspi irq thread started\n");
+  _eth_spi_configure();
 #ifdef ETH_INIT_DHCP
   ETH_SPI_dhcp();
 #endif
@@ -234,7 +268,7 @@ static void *_eth_spi_irq_thread_handler(void *a) {
     // disable eth interrupts
     enc28j60WriteOp(ENC28J60_BIT_FIELD_CLR, EIE, EIE_INTIE);
 
-    // check & clear interrupts, handle incoming packets
+    // check & clear interrupts, handle incoming frames
     u8_t eir = 0;
     bool rx_pkt;
     while (ethspi.active && (
@@ -272,16 +306,16 @@ static void *_eth_spi_irq_thread_handler(void *a) {
       //if (eir & EIR_PKTIF) { // not reliable
       if (rx_pkt) {
         DBG(D_ETH, D_DEBUG, "ethspi PKT interrupt\n");
-        // handle incoming packet directly
-        _eth_spi_handle_pkt();
+        // handle incoming frame directly
+        _eth_spi_handle_frame();
       }
     }
 
     // enc28j60 is free to send frames
     if (can_send) {
       OS_mutex_lock(&ethspi.tx_mutex);
-      // check if there are any queued packets
-      if (ethspi.tx_queue.len> 0) {
+      // check if there are any queued frames
+      if (ethspi.tx_queue.len > 0) {
         DBG(D_ETH, D_DEBUG, "ethspi TX transmit frame %i, pending: %i\n", ethspi.tx_queue.rix, ethspi.tx_queue.len);
         can_send = FALSE;
         ethspi.tx_ready = FALSE;
@@ -289,14 +323,14 @@ static void *_eth_spi_irq_thread_handler(void *a) {
             &ethspi.tx_queue.frames[ethspi.tx_queue.rix].data[0],
             ethspi.tx_queue.frames[ethspi.tx_queue.rix].len);
         ethspi.tx_queue.rix = (ethspi.tx_queue.rix+1) % ETHSPI_TX_QUEUE_SIZE;
-        if (ethspi.tx_queue.len == ETHSPI_TX_QUEUE_SIZE) {
+        ethspi.tx_queue.len--;
+        if (ethspi.tx_queue.len == ETHSPI_TX_QUEUE_SIZE-1) {
           // notify threads waiting that more frames
           // now may be queued as queue is not full anymore
           OS_cond_broadcast(&ethspi.tx_cond);
         }
-        ethspi.tx_queue.len--;
       } else {
-        // flag that we are free to send frames
+        // no queued frames, just flag that we are free to send frames
         ethspi.tx_ready = TRUE;
       }
       OS_mutex_unlock(&ethspi.tx_mutex);
@@ -326,6 +360,7 @@ void ETH_SPI_start() {
     DBG(D_ETH, D_WARN, "ethspi thread already running\n");
     return;
   }
+
   ethspi.active = TRUE;
   ethspi.rx_stack = HEAP_malloc(0x404);
   OS_thread_create(
@@ -352,29 +387,39 @@ void ETH_SPI_dhcp() {
 }
 
 bool ETH_SPI_send(u8_t *data, u16_t len, time timeout) {
-  // queue a packet for tx
+  // queue a frame for tx
   OS_mutex_lock(&ethspi.tx_mutex);
   bool timed_out = FALSE;
-  if (ethspi.active && ethspi.tx_ready) {
-    // send directly
+  bool eth_spi_thread = OS_thread_self()->id == ethspi.irq_thread.id;
+  if (ethspi.active && ethspi.tx_ready && eth_spi_thread) {
+    // send frame directly
+    DBG(D_ETH, D_DEBUG, "ethspi TX send directly\n");
     ethspi.tx_ready = FALSE;
     _eth_spi_send_ethernet_frame(data, len);
-  } else {
+  } else if (ethspi.active) {
     // queue frame
-    time alarm = SYS_get_time_ms() + timeout;
-    while (ethspi.active && ethspi.tx_queue.len >= ETHSPI_TX_QUEUE_SIZE &&
-        !(timed_out = SYS_get_time_ms() > alarm)) {
-      DBG(D_ETH, D_DEBUG, "ethspi TX stalled, pending: %i\n", ethspi.tx_queue.len);
-      OS_cond_timed_wait(&ethspi.tx_cond, &ethspi.tx_mutex, timeout);
+    if (timeout > 0) {
+      time alarm = SYS_get_time_ms() + timeout;
+      while (ethspi.active && ethspi.tx_queue.len >= ETHSPI_TX_QUEUE_SIZE &&
+          !(timed_out = SYS_get_time_ms() > alarm)) {
+        DBG(D_ETH, D_DEBUG, "ethspi TX stalled, pending: %i\n", ethspi.tx_queue.len);
+        OS_cond_timed_wait(&ethspi.tx_cond, &ethspi.tx_mutex, timeout);
+      }
     }
-    if (ethspi.active && !timed_out) {
+    if (ethspi.active && !timed_out && ethspi.tx_queue.len < ETHSPI_TX_QUEUE_SIZE) {
       ethernet_frame *pkt = &ethspi.tx_queue.frames[ethspi.tx_queue.wix];
       memcpy(pkt->data, data, len);
       pkt->len = len;
       DBG(D_ETH, D_DEBUG, "ethspi TX queued @ %i, pending: %i\n",ethspi.tx_queue.wix, ethspi.tx_queue.len+1);
       ethspi.tx_queue.wix = (ethspi.tx_queue.wix+1) % ETHSPI_TX_QUEUE_SIZE;
       ethspi.tx_queue.len++;
-    } else if (!ethspi.active) {
+      if (!eth_spi_thread) {
+        OS_mutex_lock(&ethspi.irq_mutex);
+        ethspi.irq_pending = TRUE;
+        OS_cond_signal(&ethspi.irq_cond);
+        OS_mutex_unlock(&ethspi.irq_mutex);
+      }
+    } else {
       timed_out = TRUE;
     }
   }
@@ -404,7 +449,7 @@ bool ETH_SPI_read(u8_t *data, u16_t *len, time timeout) {
 }
 
 bool ETH_SPI_tx_free() {
-  return ethspi.tx_ready;
+  return ethspi.active && (ethspi.tx_ready || ethspi.tx_queue.len < ETHSPI_TX_QUEUE_SIZE);
 }
 
 int ETH_SPI_available() {
@@ -453,36 +498,6 @@ void ETH_SPI_init() {
   OS_cond_init(&ethspi.tx_cond);
   OS_mutex_init(&ethspi.rx_mutex, 0);
   OS_cond_init(&ethspi.rx_cond);
-
-  DBG(D_ETH, D_DEBUG, "ethspi spigen init\n");
-  SPI_DEV_GEN_init(
-      &_enc28j60_spi_dev,
-      SPIDEV_CONFIG_CPHA_1E |
-      SPIDEV_CONFIG_CPOL_LO |
-      SPIDEV_CONFIG_FBIT_MSB |
-      SPIDEV_CONFIG_SPEED_9M,
-      _SPI_BUS(1),
-      SPI_ETH_GPIO_PORT, SPI_ETH_GPIO_PIN);
-  DBG(D_ETH, D_DEBUG, "ethspi spigen open\n");
-  SPI_DEV_GEN_open(&_enc28j60_spi_dev);
-  DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init\n");
-  enc28j60Init(mac_address, EIE_PKTIE | EIE_TXIE | EIE_RXERIE | EIE_TXERIE);
-
-  DBG(D_ETH, D_DEBUG, "ethspi enc28j60 init done, chip rev %02x\n", enc28j60getrev());
-  DBG(D_ETH, D_DEBUG, "ethspi mac readback: %02x:%02x:%02x:%02x:%02x:%02x\n",
-      enc28j60Read(MAADR5), enc28j60Read(MAADR4), enc28j60Read(MAADR3),
-      enc28j60Read(MAADR2), enc28j60Read(MAADR1), enc28j60Read(MAADR0)
-      );
-
-  SYS_hardsleep_ms(20);
-  enc28j60PhyWrite(PHLCON,0x476);
-  SYS_hardsleep_ms(20);
-
-  // init eth/ip layer
-  init_ip_arp_udp_tcp(mac_address, ip_address, 80);
-
-  DBG(D_ETH, D_INFO, "ethspi setup finished, ip %i.%i.%i.%i @ mac %02x.%02x.%02x.%02x.%02x.%02x\n",
-      ip_address[0], ip_address[1], ip_address[2], ip_address[3], mac_address[0], mac_address[1], mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
 }
 
 void ETH_SPI_dump() {
@@ -510,8 +525,8 @@ void ETH_SPI_dump() {
   }
   print("\n");
 #ifdef ETH_STATS
-  print("  tx pkts:%i  sent:%i bytes\n", ethspi.tx_packets, ethspi.tx_data);
-  print("  rx pkts:%i  recd:%i bytes\n", ethspi.rx_packets, ethspi.rx_data);
+  print("  tx pkts:%i  sent:%i bytes\n", ethspi.tx_frames, ethspi.tx_data);
+  print("  rx pkts:%i  recd:%i bytes\n", ethspi.rx_frames, ethspi.rx_data);
 #endif
 
 #if OS_DBG_MON

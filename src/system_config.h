@@ -272,6 +272,8 @@
 #define COMM_IMPL_STATS     1
 // use packet pool
 #define COMM_IMPL_USE_POOL  1
+// send alive packet each second
+//#define CONFIG_COMM_ALIVE_TICK
 
 /** UART **/
 
@@ -344,6 +346,9 @@
 
 // enable stack usage checks
 #define OS_STACK_USAGE_CHECK  1
+
+// enable os scheduler validity
+#define OS_RUNTIME_VALIDITY_CHECK  1
 
 
 #endif /* SYSTEM_CONFIG_H_ */

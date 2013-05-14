@@ -43,7 +43,12 @@ typedef struct {
   u32_t r11;
 } thread_frame;
 
+#define OS_CANARY_MAGIC 0xf0f0feed
+
 static struct os {
+#if OS_RUNTIME_VALIDITY_CHECK
+  u32_t os_canary_pre;
+#endif
   // pointer to current thread
   os_thread *current_thread;
   // flags of current thread
@@ -60,6 +65,9 @@ static struct os {
   list_t q_sleep;
   time first_awake;
   volatile bool preemption;
+#if OS_RUNTIME_VALIDITY_CHECK
+  u32_t os_canary_post;
+#endif
 #if OS_DBG_MON
   u8_t thread_peer_ix;
   os_thread *thread_peers[OS_THREAD_PEERS];
@@ -80,6 +88,25 @@ static void __os_thread_death(void);
 static void __os_update_preemption();
 static void __os_disable_preemption(void);
 static void __os_enable_preemption(void);
+
+//------------ debug checks -------------
+static void __os_check_validity() {
+#if OS_RUNTIME_VALIDITY_CHECK
+  // check struct
+  ASSERT(os.os_canary_pre == OS_CANARY_MAGIC);
+  ASSERT(os.os_canary_post == OS_CANARY_MAGIC);
+  // check queue
+  {
+    element_t *e;
+    e = list_first(&os.q_running);
+    while (e) {
+      os_type type = OS_TYPE(OS_OBJ(e));
+      ASSERT(type == OS_THREAD);
+      e = list_next(e);
+    }
+  }
+#endif
+}
 
 
 //------------ irq calls -------------
@@ -225,7 +252,6 @@ u32_t __os_ctx_switch(void *sp) {
     TRACE_OS_SLEEP(list_count(&os.q_running));
   }
   os.current_thread = cand;
-
   __os_update_preemption();
 
 
@@ -263,6 +289,7 @@ static void __os_sleepers_update(list_t *q, time now) {
       list_set_order(e, OS_FOREVER);
       t->flags &= ~OS_THREAD_FLAG_SLEEP;
       t->ret_val = TRUE;
+      __os_check_validity();
       __os_exit_critical_kernel();
     }
     break;
@@ -284,6 +311,7 @@ static void __os_sleepers_update(list_t *q, time now) {
           list_delete(&os.q_sleep, e);
           list_sort_insert(&os.q_sleep, e);
         }
+        __os_check_validity();
         __os_exit_critical_kernel();
       }
     }
@@ -322,10 +350,12 @@ void __os_time_tick(time now) {
 
 __attribute__((noreturn)) static void __os_thread_death(void) {
   __os_enter_critical_kernel();
+  TRACE_OS_THRDEAD(os.current_thread);
   list_delete(&os.q_running, OS_ELEMENT(os.current_thread));
   list_move(&os.q_running, &os.current_thread->q_join);
   os.current_thread->flags = 0;
   os.current_thread = NULL;
+  __os_check_validity();
   __os_exit_critical_kernel();
   (void)OS_thread_yield();
   // will never execute this
@@ -445,6 +475,8 @@ u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *a
     os.thread_peer_ix = 0;
   }
 #endif
+  TRACE_OS_THRCREATE(t);
+  __os_check_validity();
   __os_exit_critical_kernel();
 
   __os_enable_preemption();
@@ -576,6 +608,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
 #if OS_DBG_MON
       m->exited++;
 #endif
+  __os_check_validity();
   __os_update_preemption();
   __os_exit_critical_kernel();
   if (m->attrs & OS_MUTEX_ATTR_CRITICAL_EXIT) {
@@ -649,6 +682,7 @@ u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
   ASSERT((void*)c < RAM_END);
   __os_enter_critical_kernel();
   TRACE_OS_CONDWAIT(c);
+  ASSERT(strcmp("main_kernel", self->name) != 0);
   (void)OS_mutex_unlock_internal(m);
   list_delete(&os.q_running, OS_ELEMENT(self));
   list_add(&c->q_block, OS_ELEMENT(self));
@@ -669,7 +703,7 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
   self->ret_val = FALSE;
   __os_enter_critical_kernel();
 
-  //ASSERT(strcmp("main_kernel", self->name) != 0);
+  ASSERT(strcmp("main_kernel", self->name) != 0);
 
   TRACE_OS_CONDTIMWAIT(c);
 
@@ -744,6 +778,7 @@ u32_t OS_cond_signal(os_cond *c) {
   c->signalled++;
 #endif
   }
+  __os_check_validity();
   __os_update_preemption();
   __os_exit_critical_kernel();
   if (!os.preemption) {
@@ -782,6 +817,7 @@ u32_t OS_cond_broadcast(os_cond *c) {
 #if OS_DBG_MON
   c->broadcasted++;
 #endif
+  __os_check_validity();
   __os_update_preemption();
   __os_exit_critical_kernel();
   if (!os.preemption) {
@@ -818,6 +854,12 @@ void OS_svc_3(void *arg, ...) {
 void OS_init(void) {
   const u32_t ticks = (SystemCoreClock/8) / CONFIG_OS_PREEMPT_FREQ;
   memset(&os, 0, sizeof(os));
+
+#if OS_RUNTIME_VALIDITY_CHECK
+  os.os_canary_pre = OS_CANARY_MAGIC;
+  os.os_canary_post = OS_CANARY_MAGIC;
+#endif
+
   list_init(&os.q_running);
   list_init(&os.q_sleep);
   os.first_awake = OS_FOREVER;
