@@ -38,7 +38,7 @@ static void *main_thread_func(void *a) {
   while (1) {
     if (!TASK_tick()) {
       OS_thread_yield();
-      __WFI();
+      //__WFI();
     }
   }
   return 0;
@@ -145,7 +145,7 @@ int main(void) {
 
   while(1) {
     print("z");
-    SYS_hardsleep_ms(500);
+    SYS_hardsleep_ms(100);
 #if OS_DBG_MON
     while (UART_rx_available(_UART(STDIN))) {
       if (UART_get_char(_UART(STDIN)) == ' ') {

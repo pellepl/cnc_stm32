@@ -348,7 +348,7 @@
 #define OS_STACK_USAGE_CHECK  1
 
 // enable os scheduler validity
-#define OS_RUNTIME_VALIDITY_CHECK  1
+#define OS_RUNTIME_VALIDITY_CHECK  0
 
 
 #endif /* SYSTEM_CONFIG_H_ */
