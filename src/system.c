@@ -219,6 +219,7 @@ void SYS_dump_trace() {
     case _TRC_OP_OS_CTX_ENTER:
     case _TRC_OP_OS_CREATE:
     case _TRC_OP_OS_YIELD:
+    case _TRC_OP_OS_THRSLEEP:
     case _TRC_OP_OS_MUTACQ_LOCK:
     case _TRC_OP_OS_MUTWAIT_LOCK:
     case _TRC_OP_OS_SIGWAKED:

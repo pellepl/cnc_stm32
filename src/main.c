@@ -22,10 +22,43 @@
 
 os_thread main_thread;
 
+#ifdef DBG_OS_THREAD_BLINKY
+os_thread dbg_blinky_thread;
+u32_t dbg_blinky_stack[500];
+static void *dbg_blinky_thread_func(void *a) {
+  while (TRUE) {
+    GPIO_disable(GPIOC, GPIO_Pin_7);
+    OS_thread_sleep(950);
+    GPIO_enable(GPIOC, GPIO_Pin_7);
+    OS_thread_sleep(50);
+  }
+  return NULL;
+}
+#endif
+
+#ifdef DBG_KERNEL_TASK_BLINKY
+task_timer dbg_blinky_task_timer;
+task *dbg_blinky_task;
+static bool _dbg_bl_state = TRUE;
+static void dbg_blinky_task_func(u32_t i, void *p) {
+  if (_dbg_bl_state) {
+    GPIO_disable(GPIOC, GPIO_Pin_6);
+    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 50);
+    _dbg_bl_state = FALSE;
+  } else {
+    GPIO_enable(GPIOC, GPIO_Pin_6);
+    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 950);
+    _dbg_bl_state = TRUE;
+  }
+}
+#endif
+
+// main thread loop
+
 static void *main_thread_func(void *a) {
   print(TEXT_NOTE("Kernel running...\n"));
 
-
+  // init comm stack and connect to phy
   COMM_UART_init(_UART(COMMIN));
   COMM_UDP_init();
   COMM_init();
@@ -34,6 +67,24 @@ static void *main_thread_func(void *a) {
 #ifdef CONFIG_CNC
   CNC_COMM_init();
 #endif
+
+#ifdef DBG_KERNEL_TASK_BLINKY
+  dbg_blinky_task = TASK_create(dbg_blinky_task_func, TASK_STATIC);
+  TASK_start_timer(dbg_blinky_task, &dbg_blinky_task_timer, 0,0,0,950,"dbg_blink");
+#endif
+
+  // start blinky thread
+#ifdef DBG_OS_THREAD_BLINKY
+  OS_thread_create(
+      &dbg_blinky_thread,
+      OS_THREAD_FLAG_PRIVILEGED,
+      dbg_blinky_thread_func,
+      0,
+      dbg_blinky_stack,
+      sizeof(dbg_blinky_stack)-4,
+      "dbg_blink");
+#endif
+
 
   while (1) {
     if (!TASK_tick()) {
@@ -47,6 +98,8 @@ static void *main_thread_func(void *a) {
 static void main_spi_cb(spi_flash_dev *dev, int result) {
   print("spi flash open cb res:%i\n", result);
 }
+
+// main entry from bootstrap
 
 int main(void) {
   s32_t res;
@@ -159,9 +212,14 @@ int main(void) {
   return 0;
 }
 
+// assert failed handler from stmlib? TODO
+
 void assert_failed(uint8_t* file, uint32_t line) {
   SYS_assert((char*)file, (s32_t)line);
 }
+
+// user hardfault handler
+
 #if USER_HARDFAULT
 
 void **HARDFAULT_PSP;

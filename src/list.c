@@ -148,3 +148,10 @@ void list_sort_insert(list_t* l, void* ve) {
 		}
 	}
 }
+
+void list_set_last(list_t* list, void* element) {
+  // TODO PETER optimize
+  list_delete(list, element);
+  list_add(list, element);
+}
+

@@ -102,6 +102,10 @@ void list_delete(list_t* list, void* element);
  */
 void list_sort_insert(list_t* list, void* element);
 /**
+ * Takes out element and moves it last in list
+ */
+void list_set_last(list_t* list, void* element);
+/**
  * Moves all elements in list src to list dst, list 2 becomes empty
  */
 void list_move(list_t* l_dst, list_t* l_src);

@@ -303,6 +303,7 @@
 #define CONFIG_OS_BUMP          1
 
 /** ETH **/
+
 #define ETH_ENC28J60_MII_POLL_GUARD   (0x10000)
 #define ETH_MAC {0xc0,0xff,0xee,0xca,0xfe,0x01}
 #define ETH_IP  {192,168,0,150}
@@ -350,5 +351,10 @@
 // enable os scheduler validity
 #define OS_RUNTIME_VALIDITY_CHECK  0
 
+// enable kernel task led blinky
+#define DBG_KERNEL_TASK_BLINKY
+
+// enable os thread led blinky
+#define DBG_OS_THREAD_BLINKY
 
 #endif /* SYSTEM_CONFIG_H_ */

@@ -215,6 +215,7 @@ u32_t __os_ctx_switch(void *sp) {
   __CLREX();  // removes the local exclusive access tag for the processor
 
   __os_enter_critical_kernel();
+
   if (os.current_thread != NULL) {
     TRACE_OS_CTX_LEAVE(os.current_thread);
     // save current psp to current thread
@@ -225,20 +226,23 @@ u32_t __os_ctx_switch(void *sp) {
     ASSERT(*(u32_t*)(os.current_thread->stack_start - 4) == OS_STACK_START_MARKER);
     ASSERT(*(u32_t*)(os.current_thread->stack_end) == OS_STACK_END_MARKER);
 #endif
-#if CONFIG_OS_BUMP
-    if (os.bumped_thread != NULL) {
-      // if we have a bumped thread, prefer that to anything else
-      cand = os.bumped_thread;
-      os.bumped_thread = NULL;
-    } else
-#endif
-    {
-      cand = OS_THREAD(list_next(OS_ELEMENT(os.current_thread)));
-    }
   }
 
-  if (cand == NULL) {
+  // find next candidate
+#if CONFIG_OS_BUMP
+  if (os.bumped_thread != NULL) {
+    // if we have a bumped thread, prefer that to anything else
+    cand = os.bumped_thread;
+    os.bumped_thread = NULL;
+  } else
+#endif
+  {
     cand = OS_THREAD(list_first(&os.q_running));
+  }
+
+  // reorder prio
+  if (cand != NULL) {
+    list_set_last(&os.q_running, OS_ELEMENT(cand));
   }
   __os_exit_critical_kernel();
 
@@ -534,10 +538,11 @@ void OS_thread_sleep(time delay) {
   os_thread *self = OS_thread_self();
   time awake = SYS_get_time_ms() + delay;
   __os_enter_critical_kernel();
+  TRACE_OS_THRSLEEP(self);
   list_delete(&os.q_running, OS_ELEMENT(self));
   list_set_order(OS_ELEMENT(self), awake);
   list_sort_insert(&os.q_sleep, OS_ELEMENT(self));
-  os.first_awake = MIN(awake, os.first_awake);
+  __os_update_first_awake();
   self->flags |= OS_THREAD_FLAG_SLEEP;
   __os_exit_critical_kernel();
   (void)OS_thread_yield();
