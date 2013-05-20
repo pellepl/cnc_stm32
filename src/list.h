@@ -37,7 +37,7 @@ typedef struct list_s
 /**
  * Checks if list is empty
  */
-#define list_empty(alist) \
+#define list_is_empty(alist) \
   ((alist)->first_element == NULL)
 /**
  * Returns first element in list
@@ -52,7 +52,7 @@ typedef struct list_s
 /**
  * Checks if list contains only one element
  */
-#define list_size_one(alist) \
+#define list_is_size_one(alist) \
   ((alist)->last_element == (alist).first_element)
 /**
  * Returns list size
@@ -86,36 +86,36 @@ typedef struct list_s
  */
 void list_init(list_t* list);
 /**
- * Adds an element to end of list
+ * Adds an element to end of list O(1)
  */
 void list_add(list_t* list, void* element);
 /**
- * Inserts element before specified element
- */
-void list_insert(list_t* list, void* element, void* element_before);
-/**
- * Deletes element from list
- */
-void list_delete(list_t* list, void* element);
-/**
- * Inserts element in list sorted on elements ascending order
- */
-void list_sort_insert(list_t* list, void* element);
-/**
- * Takes out element and moves it last in list
- */
-void list_set_last(list_t* list, void* element);
-/**
- * Moves all elements in list src to list dst, list 2 becomes empty
- */
-void list_move(list_t* l_dst, list_t* l_src);
-/**
- * Adds an element to beginning of list
+ * Adds an element to beginning of list O(1)
  */
 void list_add_first(list_t* list, void* element);
 /**
- * Moves all elements in list src to list dst, list 2 becomes empty
+ * Inserts element before specified element O(1)
  */
-void list_move_first(list_t* l_dst, list_t* l_src);
+void list_insert_before(list_t* list, void* element, void* element_before);
+/**
+ * Deletes element from list O(1)
+ */
+void list_delete(list_t* list, void* element);
+/**
+ * Inserts element in list sorted on elements ascending order O(n)
+ */
+void list_sort_insert(list_t* list, void* element);
+/**
+ * Takes out element and moves it last in list O(1)
+ */
+void list_move_last(list_t* list, void* element);
+/**
+ * Moves all elements in list src to end of list dst, list src becomes empty O(1)
+ */
+void list_move_all(list_t* l_dst, list_t* l_src);
+/**
+ * Moves all elements in list src to beginning of list dst, list src becomes empty O(1)
+ */
+void list_move_all_first(list_t* l_dst, list_t* l_src);
 
 #endif /*_LIST_H_*/

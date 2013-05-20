@@ -78,7 +78,7 @@ int COMM_cb_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned char 
   s32_t res = R_COMM_OK;
   comm_state.cur_rx = rx;
 
-  // avoid sending up packets that were resent but already received
+  // detect packets that were resent but already received
   // keep track of latest 32 received packet sequence numbers
   s16_t seqd = seq_delta(rx->seqno, comm_state.last_seqno);
   u8_t already_received = FALSE;
@@ -144,18 +144,16 @@ int COMM_cb_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned char 
 #endif
 
 #ifdef CONFIG_CNC
-  if (!already_received) {
-    switch (data[0]) {
-    case COMM_PROTOCOL_CNC_ID:
-      res = CNC_COMM_on_pkt(rx->seqno, &data[1], len-1);
-      break;
-    case COMM_PROTOCOL_FILE_ID:
-      res = COMM_FILE_on_pkt(&data[0], len);
-      break;
-    default:
-      DBG(D_COMM, D_WARN, "COMM unrecognized protocol id %02x!\n", data[0]);
-      break;
-    }
+  switch (data[0]) {
+  case COMM_PROTOCOL_CNC_ID:
+    res = CNC_COMM_on_pkt(rx->seqno, &data[1], len-1, already_received);
+    break;
+  case COMM_PROTOCOL_FILE_ID:
+    res = COMM_FILE_on_pkt(&data[0], len, already_received);
+    break;
+  default:
+    DBG(D_COMM, D_WARN, "COMM unrecognized protocol id %02x!\n", data[0]);
+    break;
   }
 #endif
 

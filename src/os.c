@@ -242,7 +242,7 @@ u32_t __os_ctx_switch(void *sp) {
 
   // reorder prio
   if (cand != NULL) {
-    list_set_last(&os.q_running, OS_ELEMENT(cand));
+    list_move_last(&os.q_running, OS_ELEMENT(cand));
   }
   __os_exit_critical_kernel();
 
@@ -251,7 +251,7 @@ u32_t __os_ctx_switch(void *sp) {
     os.current_flags = cand->flags;
     TRACE_OS_CTX_ENTER(cand);
   } else {
-    // no candidate
+    // no candidate, goto sleep
     os.current_flags = 0;
     TRACE_OS_SLEEP(list_count(&os.q_running));
   }
@@ -261,6 +261,7 @@ u32_t __os_ctx_switch(void *sp) {
 
   asm volatile ("nop"); // compiler reorder barrier
   if (os.current_flags) {
+    // move candidate's sp to R1 before return
     asm volatile (
         "mov    r1, %0\n"
         :
@@ -304,7 +305,7 @@ static void __os_sleepers_update(list_t *q, time now) {
       if (now >= e->sort_order) {
         __os_sleepers_update(&c->q_sleep, now);
         __os_enter_critical_kernel();
-        if (list_empty(&c->q_sleep)) {
+        if (list_is_empty(&c->q_sleep)) {
           // conds sleep queue got empty, remove from os's sleep queue
           list_set_order(c, OS_FOREVER);
           c->has_sleepers = FALSE;
@@ -326,7 +327,7 @@ static void __os_sleepers_update(list_t *q, time now) {
 }
 
 static void __os_update_first_awake() {
-  if (list_empty(&os.q_sleep)) {
+  if (list_is_empty(&os.q_sleep)) {
     os.first_awake = OS_FOREVER;
   } else {
     os.first_awake = list_get_order(list_first(&os.q_sleep));
@@ -356,7 +357,7 @@ __attribute__((noreturn)) static void __os_thread_death(void) {
   __os_enter_critical_kernel();
   TRACE_OS_THRDEAD(os.current_thread);
   list_delete(&os.q_running, OS_ELEMENT(os.current_thread));
-  list_move(&os.q_running, &os.current_thread->q_join);
+  list_move_all(&os.q_running, &os.current_thread->q_join);
   os.current_thread->flags = 0;
   os.current_thread = NULL;
   __os_check_validity();
@@ -605,7 +606,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
   // reinsert all waiting threads to running queue
   __os_enter_critical_kernel();
   TRACE_OS_MUTUNLOCK(m);
-  list_move(&os.q_running, &m->q_block);
+  list_move_all(&os.q_running, &m->q_block);
   // reset mutex
   m->lock = 0;
 
@@ -687,7 +688,7 @@ u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
   ASSERT((void*)c < RAM_END);
   __os_enter_critical_kernel();
   TRACE_OS_CONDWAIT(c);
-  ASSERT(strcmp("main_kernel", self->name) != 0);
+  //ASSERT(strcmp("main_kernel", self->name) != 0);
   (void)OS_mutex_unlock_internal(m);
   list_delete(&os.q_running, OS_ELEMENT(self));
   list_add(&c->q_block, OS_ELEMENT(self));
@@ -750,17 +751,20 @@ u32_t OS_cond_signal(os_cond *c) {
   TRACE_OS_CONDSIG(c);
 
   // first, check if there are sleepers
-  if (!list_empty(&c->q_sleep)) {
+  if (!list_is_empty(&c->q_sleep)) {
 
     // wake up first timed waiter
     t = OS_THREAD(list_first(&c->q_sleep));
     TRACE_OS_SIGWAKED(t);
 #if CONFIG_OS_BUMP
-    os.bumped_thread = t;
+    if (os.current_thread != t) {
+      // play it nice and do not bump if thread is already running
+      os.bumped_thread = t;
+    }
 #endif
     list_delete(&c->q_sleep, OS_ELEMENT(t));
     // did the condition's sleep queue become empty?
-    if (list_empty(&c->q_sleep)) {
+    if (list_is_empty(&c->q_sleep)) {
       c->has_sleepers = FALSE;
       // yep, remove condition from os sleep queue and update first_awake value.
       list_delete(&os.q_sleep, OS_ELEMENT(c));
@@ -798,19 +802,19 @@ u32_t OS_cond_broadcast(os_cond *c) {
   TRACE_OS_CONDBROAD(c);
 
   // wake all sleepers
-  if (!list_empty(&c->q_sleep)) {
+  if (!list_is_empty(&c->q_sleep)) {
 #if CONFIG_OS_BUMP
     os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
 #endif
     TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_sleep)));
-    list_move(&os.q_running, &c->q_sleep);
+    list_move_all(&os.q_running, &c->q_sleep);
     //  remove condition from os sleep queue and update first_awake value.
     c->has_sleepers = FALSE;
     list_delete(&os.q_sleep, OS_ELEMENT(c));
     __os_update_first_awake();
   } else {
     // if no sleepers, bump first blocked thread
-    if (!list_empty(&c->q_block)) {
+    if (!list_is_empty(&c->q_block)) {
 #if CONFIG_OS_BUMP
       os.bumped_thread = OS_THREAD(list_first(&c->q_block));
 #endif
@@ -818,7 +822,7 @@ u32_t OS_cond_broadcast(os_cond *c) {
     }
   }
   // wake all blockees
-  list_move(&os.q_running, &c->q_block);
+  list_move_all(&os.q_running, &c->q_block);
 #if OS_DBG_MON
   c->broadcasted++;
 #endif
@@ -920,7 +924,7 @@ bool OS_DBG_print_thread(os_thread *t, bool detail, int indent) {
 #endif
   print("\n");
 
-  if (!list_empty(&t->q_join)) {
+  if (!list_is_empty(&t->q_join)) {
     print("%s       Join List (%i): \n", tab,
         list_count(&t->q_join));
     OS_DBG_print_thread_list(&t->q_join, FALSE, indent + 9);
@@ -973,7 +977,7 @@ bool OS_DBG_print_mutex(os_mutex *m, bool detail, int indent) {
     print("\n");
   }
   print("%s       entries:%i  exits:%i\n", tab, m->entered, m->exited);
-  if (!list_empty(&m->q_block)) {
+  if (!list_is_empty(&m->q_block)) {
     print("%s       Blocked List (%i)\n", tab, list_count(&m->q_block));
     OS_DBG_print_thread_list(&m->q_block, FALSE, indent + 9);
   }
@@ -1003,11 +1007,11 @@ bool OS_DBG_print_cond(os_cond *c, bool detail, int indent) {
   if (!detail) return TRUE;
   print("%s       waits:%i  signals:%i  broadcasts:%i\n", tab,
       c->waiting, c->signalled, c->broadcasted);
-  if (!list_empty(&c->q_block)) {
+  if (!list_is_empty(&c->q_block)) {
     print("%s       Blocked List (%i)\n", tab, list_count(&c->q_block));
     OS_DBG_print_thread_list(&c->q_block, FALSE, indent + 9);
   }
-  if (!list_empty(&c->q_sleep)) {
+  if (!list_is_empty(&c->q_sleep)) {
     print("%s       TimedWait List (%i)\n", tab, list_count(&c->q_sleep));
     OS_DBG_print_thread_list(&c->q_sleep, FALSE, indent + 9);
   }

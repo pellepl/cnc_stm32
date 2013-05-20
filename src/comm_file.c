@@ -207,11 +207,13 @@ static void _comm_file_spif_cb_req_next() {
 /**
  * Got packet callback from comm stack
  */
-s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len) {
+s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len, bool already_received) {
   s32_t res = R_COMM_OK;
   u8_t reply;
   comm_file_hdr *h = (comm_file_hdr *)data;
   bool abort_and_tx_stop = FALSE;
+
+  if (already_received) return res;
 
   DBG(D_SYS, D_DEBUG, "COMMFILE got request, seq: %08x\n", h->sequence);
   if (h->sequence == 0xffffffff) {

@@ -22,6 +22,14 @@
 
 #ifdef CONFIG_CNC
 
+#define CNC_COMM_MAX_STORED_LATCH_IDS 4
+
+static struct {
+  u16_t seqno[CNC_COMM_MAX_STORED_LATCH_IDS];
+  u32_t latch_id[CNC_COMM_MAX_STORED_LATCH_IDS];
+  u8_t ix;
+} stored_latch_ids;
+
 static task *task_sr;
 static task *task_pos;
 static task *task_alive;
@@ -43,6 +51,8 @@ static volatile bool connected;
     (((b)[1] << 8) & 0x0000ff00) | \
     (((b)[2] << 16) & 0x00ff0000) | \
     (((b)[3] << 24) & 0xff000000)
+
+static s32_t CNC_COMM_handle_already_received_latch_cmd(u16_t seqno);
 
 void CNC_COMM_set_sr_timer_recurrence(u32_t delta) {
   if (delta > 10 || delta == 0) {
@@ -94,7 +104,8 @@ u32_t CNC_COMM_get_version() {
   return CNC_COMM_VERSION;
 }
 
-s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len) {
+s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len, bool already_received) {
+  bool latch_cmd = FALSE;
   s32_t res = R_COMM_OK;
   u8_t cmd = *data++;
   len--;
@@ -163,14 +174,24 @@ s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len) {
     break;
   case COMM_PROTOCOL_LATCH_XYZ:
     if (argc == 7) {
-      f = CNC_latch_xyz;
+      if (already_received) {
+        return CNC_COMM_handle_already_received_latch_cmd(seq);
+      } else {
+        latch_cmd = TRUE;
+        f = CNC_latch_xyz;
+      }
     } else {
       DBG(D_APP, D_WARN, "CNC_COMM: bad argc on CNC_latch_xyz, %i\n", argc);
     }
     break;
   case COMM_PROTOCOL_LATCH_PAUSE:
     if (argc == 1) {
-      f = CNC_latch_pause;
+      if (already_received) {
+        return CNC_COMM_handle_already_received_latch_cmd(seq);
+      } else {
+        latch_cmd = TRUE;
+        f = CNC_latch_pause;
+      }
     } else {
       DBG(D_APP, D_WARN, "CNC_COMM: bad argc on CNC_latch_pause, %i\n", argc);
     }
@@ -238,6 +259,16 @@ s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len) {
     DBG(D_APP, D_DEBUG, "CNC_COMM: cmd %02x returned %08x\n", cmd, fres);
     u8_t buf[sizeof(u32_t)];
     itomem((u32_t)fres, buf);
+    if (latch_cmd && (u32_t)fres != CNC_ERR_LATCH_BUSY) {
+      // store latch_id for this latch command if we get a resend
+      stored_latch_ids.seqno[stored_latch_ids.ix] = seq;
+      stored_latch_ids.latch_id[stored_latch_ids.ix] = (u32_t)fres;
+      if (stored_latch_ids.ix >= CNC_COMM_MAX_STORED_LATCH_IDS - 1) {
+        stored_latch_ids.ix = 0;
+      } else {
+        stored_latch_ids.ix++;
+      }
+    }
     res = COMM_reply(buf, sizeof(buf));
   } else {
     switch (cmd) {
@@ -333,6 +364,25 @@ void CNC_COMM_on_err(u16_t seq, s32_t err) {
   }
 }
 
+
+static s32_t CNC_COMM_handle_already_received_latch_cmd(u16_t seqno) {
+  s32_t res;
+  u8_t buf[4];
+  int i;
+  for (i = 0; i < CNC_COMM_MAX_STORED_LATCH_IDS; i++) {
+    if (stored_latch_ids.seqno[i] == seqno) {
+      itomem(stored_latch_ids.latch_id[i], buf);
+      break;
+    }
+  }
+  if (i == CNC_COMM_MAX_STORED_LATCH_IDS) {
+    DBG(D_APP, D_WARN, "got a resent latch command whose seq isn't registered %04x\n", seqno);
+    itomem(CNC_ERR_LATCH_BUSY, buf);
+  }
+  res = COMM_reply(buf, sizeof(buf));
+
+  return res;
+}
 
 static void cnc_sr_timer_task(u32_t ignore, void *ignore_more) {
   if (sr_timer_recurrence && pos_timer_recurrence != sr_timer_recurrence) {
@@ -435,6 +485,9 @@ void CNC_COMM_init() {
     CNC_enable_error(1<<CNC_ERROR_BIT_SETTINGS_CORRUPT);
   }
   print("Non-volatile offset read, res %i\n", res);
+
+  memset(&stored_latch_ids, 0xff, sizeof(stored_latch_ids));
+
   task_sr = TASK_create(cnc_sr_timer_task, TASK_STATIC);
   TASK_start_timer(task_sr, &task_sr_timer, 0, NULL, 500, 0, "cnc_sr");
   CNC_COMM_apply_sr_timer_recurrence();

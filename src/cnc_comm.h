@@ -61,7 +61,7 @@ void CNC_COMM_apply_sr_timer_recurrence();
 void CNC_COMM_set_pos_timer_recurrence(u32_t delta);
 u32_t CNC_COMM_get_pos_timer_recurrence();
 void CNC_COMM_apply_pos_timer_recurrence();
-s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len);
+s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len, bool already_received);
 void CNC_COMM_on_ack(u16_t seq);
 void CNC_COMM_on_err(u16_t seq, s32_t err);
 

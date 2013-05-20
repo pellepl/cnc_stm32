@@ -385,7 +385,7 @@ void CNC_get_motion(CNC_Motion_t* pMotion) {
 u32_t CNC_latch_xyz(s32_t stepsX, u32_t freqX, s32_t stepsY, u32_t freqY, s32_t stepsZ,
     u32_t freqZ, u32_t rapid) {
   if (!CNC_is_latch_free()) {
-    return FALSE;
+    return CNC_ERR_LATCH_BUSY;
   }
   machine.latch.id = machine.latch_id++;
 	machine.latch.rapid = rapid;
@@ -396,12 +396,12 @@ u32_t CNC_latch_xyz(s32_t stepsX, u32_t freqX, s32_t stepsY, u32_t freqY, s32_t 
 
 	machine.latch_registers = TRUE;
 
-	return TRUE;
+	return machine.latch.id;
 }
 
 u32_t CNC_latch_pause(u32_t timeInMs) {
   if (!CNC_is_latch_free()) {
-    return FALSE;
+    return CNC_ERR_LATCH_BUSY;
   }
   machine.latch.id = machine.latch_id++;
 	set_latch_motion_regs_for_axis(&machine.latch.vector[X_AXIS], 0, 0, 0);
@@ -410,7 +410,7 @@ u32_t CNC_latch_pause(u32_t timeInMs) {
 	machine.latch.pause = timeInMs == 0 ? 0 : 1 + timeInMs;
   machine.latch_registers = TRUE;
 
-	return TRUE;
+	return machine.latch.id;
 }
 
 static void set_imm_motion_regs_for_axis(CNC_Vector_t* pAxis,

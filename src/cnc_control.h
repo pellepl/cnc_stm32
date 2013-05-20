@@ -41,6 +41,8 @@
 #define CNC_ERROR_BIT_SETTINGS_CORRUPT   (1)
 #define CNC_ERROR_BIT_COMM_LOST          (2)
 
+#define CNC_ERR_LATCH_BUSY              (-1)
+
 
 typedef enum {
   X_AXIS = 0,
