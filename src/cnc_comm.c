@@ -17,8 +17,6 @@
 #include "nvstorage.h"
 #include "comm_file.h"
 
-// enable not to hangup on alive ping/pong timeouts
-#define COMM_DBG_DONT_HANGUP
 
 #ifdef CONFIG_CNC
 
@@ -333,6 +331,11 @@ s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len, bool already_received) {
 
 void CNC_COMM_on_ack(u16_t seq) {
   if (alive_msg_seqno != -1 && seq == alive_msg_seqno) {
+#ifdef CONFIG_COMM_STATUS
+    if (!connected) {
+      print("CNC COMM connect\n");
+    }
+#endif
     connected = TRUE;
     LED_blink_single(LED_CNC_COMM_BIT, 2,1,0);
   }
@@ -348,6 +351,11 @@ static void CNC_COMM_handle_comm_dead(s32_t err) {
       DBG(D_APP, D_WARN, "communication lost, stuff in latch or pipe\n");
       CNC_enable_error(1<<CNC_ERROR_BIT_COMM_LOST);
     }
+#ifdef CONFIG_COMM_STATUS
+    if (connected) {
+      print("CNC COMM disconnect\n");
+    }
+#endif
     connected = FALSE;
   }
   COMM_UART_next_channel();
@@ -385,6 +393,7 @@ static s32_t CNC_COMM_handle_already_received_latch_cmd(u16_t seqno) {
 }
 
 static void cnc_sr_timer_task(u32_t ignore, void *ignore_more) {
+  if (!connected) return;
   if (sr_timer_recurrence && pos_timer_recurrence != sr_timer_recurrence) {
     u8_t buf[2 + sizeof(u32_t)];
     buf[0] = COMM_PROTOCOL_CNC_ID;
@@ -397,6 +406,7 @@ static void cnc_sr_timer_task(u32_t ignore, void *ignore_more) {
 
 static void cnc_pos_timer_task(u32_t ignore, void *ignore_more) {
   s32 x; s32 y; s32 z;
+  if (!connected) return;
   if (pos_timer_recurrence && pos_timer_recurrence != sr_timer_recurrence) {
     u8_t buf[2 + sizeof(u32_t)*3];
     buf[0] = COMM_PROTOCOL_CNC_ID;
@@ -498,7 +508,7 @@ void CNC_COMM_init() {
   alive_msg_seqno = -1;
   connected = FALSE;
   task_alive = TASK_create(cnc_alive_timer_task, TASK_STATIC);
-  TASK_start_timer(task_alive, &task_alive_timer, 0, NULL, 500, 1000, "cnc_alive");
+  TASK_start_timer(task_alive, &task_alive_timer, 0, NULL, 500, 2000, "cnc_alive");
 }
 
 #endif // CONFIG_CNC

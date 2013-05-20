@@ -19,6 +19,7 @@
 #include "bl_exec.h"
 #include "spi_flash_m25p16.h"
 #include "comm_file.h"
+#include "enc28j60_spi_eth.h"
 
 os_thread main_thread;
 
@@ -63,10 +64,13 @@ static void *main_thread_func(void *a) {
   COMM_UDP_init();
   COMM_init();
   // TODO PETER COMM_set_stack(COMM_UART_get_comm());
-  COMM_set_stack(COMM_UDP_get_comm());
+  COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
 #ifdef CONFIG_CNC
   CNC_COMM_init();
 #endif
+
+  ETH_SPI_init();
+  ETH_SPI_start();
 
 #ifdef DBG_KERNEL_TASK_BLINKY
   dbg_blinky_task = TASK_create(dbg_blinky_task_func, TASK_STATIC);

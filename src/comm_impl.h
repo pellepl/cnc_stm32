@@ -21,8 +21,10 @@ void COMM_UART_set_uart(uart *u);
 comm * COMM_UDP_get_comm();
 void COMM_UDP_init();
 
+void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data);
+
 void COMM_init();
-void COMM_set_stack(comm *driver);
+void COMM_set_stack(comm *driver, void (*comm_beacon_handler)(comm_addr addr, u8_t type, u16_t len, u8_t *data));
 int COMM_dump();
 int COMM_tx(int dst, u8_t* data, u16_t len, int ack);
 int COMM_send_alert();

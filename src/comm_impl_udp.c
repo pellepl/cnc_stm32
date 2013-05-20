@@ -18,6 +18,12 @@
 #include "net.h"
 #include "ip_arp_udp_tcp.h"
 
+typedef struct {
+  bool valid;
+  u8_t ip[4];
+  u8_t mac[6];
+} beacon_info;
+
 static struct {
   // communication stack
   comm driver;
@@ -25,6 +31,8 @@ static struct {
   u8_t rx_frame[400];
   u8_t tx_frame[400];
   u16_t tx_ix;
+  beacon_info cur_server;
+  beacon_info beacons[2];
 } ecomm;
 
 comm *COMM_UDP_get_comm() {
@@ -101,6 +109,7 @@ static void *COMM_UDP_thread_func(void *arg) {
           int res = R_COMM_OK;
           int i = 0;
           DBG(D_COMM, D_DEBUG, "COMM UDP rx frame, len %i\n", len);
+
           while (i < len - UDP_DATA_P && !fin && res == R_COMM_OK) {
             res = ecomm.driver.phy.up_rx_f(&ecomm.driver, ecomm.rx_frame[i + UDP_DATA_P],
                 &fin);
@@ -126,22 +135,34 @@ static struct {
   u32_t canary2;
   comm_arg arg;
   u32_t canary3;
-} ucomm_data;
+} ecomm_data;
 
 static void COMM_UDP_alloc(comm *c, void **data, void **arg, unsigned int size_data, unsigned int size_arg) {
-  // TODO PETER udp stack is synchronous, use static buffers directly
-  *data = &ucomm_data.buf[0];
-  *arg = &ucomm_data.arg;
-  ucomm_data.canary1 = 0x123456fe;
-  ucomm_data.canary2 = 0xfedc1234;
-  ucomm_data.canary3 = 0x5678abcd;
+  // udp stack is synchronous, use static buffers directly
+  *data = &ecomm_data.buf[0];
+  *arg = &ecomm_data.arg;
+  ecomm_data.canary1 = 0x123456fe;
+  ecomm_data.canary2 = 0xfedc1234;
+  ecomm_data.canary3 = 0x5678abcd;
 }
 
 //typedef void (*comm_lnk_free_rx_fn)(comm *comm, void *data, void *arg);
 static void COMM_UDP_free(comm *c, void *data, void *arg) {
-  ASSERT(ucomm_data.canary1 == 0x123456fe);
-  ASSERT(ucomm_data.canary2 == 0xfedc1234);
-  ASSERT(ucomm_data.canary3 == 0x5678abcd);
+  ASSERT(ecomm_data.canary1 == 0x123456fe);
+  ASSERT(ecomm_data.canary2 == 0xfedc1234);
+  ASSERT(ecomm_data.canary3 == 0x5678abcd);
+}
+
+void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data) {
+  if (a != COMM_CONTROLLER_ADDRESS) return;
+  beacon_info bi;
+
+  memcpy(bi.mac, &ecomm.rx_frame[ETH_SRC_MAC], 6);
+  memcpy(bi.ip, &ecomm.rx_frame[IP_SRC_P], 4);
+  DBG(D_COMM, D_INFO, "beacon udp ip src:  %i.%i.%i.%i\n",
+      bi.ip[0], bi.ip[1], bi.ip[2], bi.ip[3]);
+  DBG(D_COMM, D_INFO, "beacon udp mac src: %02x.%02x.%02x.%02x.%02x.%02x\n",
+      bi.mac[0], bi.mac[1], bi.mac[2], bi.mac[3], bi.mac[4], bi.mac[5]);
 }
 
 static u32_t comm_udp_thr_stack[0x101];

@@ -273,7 +273,7 @@
 // use packet pool
 #define COMM_IMPL_USE_POOL  1
 // send alive packet each second
-//#define CONFIG_COMM_ALIVE_TICK
+#define CONFIG_COMM_ALIVE_TICK
 
 /** UART **/
 
@@ -294,6 +294,12 @@
 #define COMM_UARTS  2
 
 #define USE_COLOR_CODING
+
+#define CONFIG_ETH_DHCP_SHOW
+#define CONFIG_ETH_LINK_STATUS_AT_STARTUP
+#define CONFIG_COMM_STATUS
+// enable not to hangup on alive ping/pong timeouts
+//#define COMM_DBG_DONT_HANGUP
 
 /** OS **/
 
@@ -337,7 +343,7 @@
 
 // enable or disable tracing
 #define DBG_TRACE_MON
-#define TRACE_SIZE            (256)
+#define TRACE_SIZE            (512)
 
 // enable debug monitor for os
 #define OS_DBG_MON            1

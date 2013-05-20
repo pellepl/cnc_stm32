@@ -3,6 +3,8 @@
 #include "cnc_comm.h"
 #include "comm_file.h"
 
+#define COMM_IMPL_PROTOCOL_HANDLER_REG  16
+
 #if COMM_IMPL_STATS
 static u32_t recd = 0;
 static time clockpoint;
@@ -14,6 +16,11 @@ static u32_t outofseq_count = 0;
 static u32_t resent_count = 0;
 #endif
 
+typedef struct {
+  u16_t seqno;
+  u8_t protocol_handler_id;
+} prothand_reg;
+
 static struct {
   // communication stack
   comm *driver;
@@ -23,10 +30,17 @@ static struct {
   u32_t seq_mask;
   // last received packet
   comm_arg *cur_rx;
+  // beacon handler
+  void (*comm_beacon_handler)(comm_addr addr, u8_t type, u16_t len, u8_t *data);
+  // tx protocol handler registrations
+  prothand_reg prothand_regs[COMM_IMPL_PROTOCOL_HANDLER_REG];
+  u8_t prothand_ix;
 } comm_state;
 
-void COMM_set_stack(comm *driver) {
+void COMM_set_stack(comm *driver,
+    void (*comm_beacon_handler)(comm_addr addr, u8_t type, u16_t len, u8_t *data)) {
   comm_state.driver = driver;
+  comm_state.comm_beacon_handler = comm_beacon_handler;
 }
 
 int COMM_tx(int dst, u8_t* data, u16_t len, int ack) {
@@ -35,7 +49,20 @@ int COMM_tx(int dst, u8_t* data, u16_t len, int ack) {
   pktcount_tx++;
 #endif
   s32_t res = comm_tx(comm_state.driver, dst, len, data, ack);
-  if (res < R_COMM_OK) DBG(D_COMM, D_WARN, "COMM tx failed %i\n", res);
+  if (res < R_COMM_OK) {
+    DBG(D_COMM, D_WARN, "COMM tx failed %i\n", res);
+  } else {
+    if (ack) {
+      // save this seqno for protocol handler sending this pkt when ack arrives
+      if (comm_state.prothand_ix == 0) {
+        comm_state.prothand_ix = COMM_IMPL_PROTOCOL_HANDLER_REG - 1;
+      } else {
+        comm_state.prothand_ix--;
+      }
+      comm_state.prothand_regs[comm_state.prothand_ix].seqno = res;
+      comm_state.prothand_regs[comm_state.prothand_ix].protocol_handler_id = data[0];
+    }
+  }
   return res;
 }
 
@@ -160,13 +187,31 @@ int COMM_cb_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned char 
   return res;
 }
 
+static u8_t comm_get_protocol_id_for_ack(u16_t seqno) {
+  int i;
+  for (i = 0; i < COMM_IMPL_PROTOCOL_HANDLER_REG; i++) {
+    int ix = (comm_state.prothand_ix + i) % COMM_IMPL_PROTOCOL_HANDLER_REG;
+    if (comm_state.prothand_regs[ix].seqno == seqno) {
+      return comm_state.prothand_regs[ix].protocol_handler_id;
+    }
+  }
+  return 0;
+}
+
 /* received an ack */
 //typedef void (*comm_app_user_ack_fn)(comm *comm, comm_arg *rx, unsigned short seqno, unsigned short len, unsigned char *data);
 void COMM_cb_ack_pkt(comm *comm, comm_arg *rx, unsigned short seqno, unsigned short len, unsigned char *data) {
   DBG(D_COMM, D_DEBUG, "COMM ack seqno:0x%03x\n", seqno);
-  // todo report to correct protocol handler
 #ifdef CONFIG_CNC
-  CNC_COMM_on_ack(seqno);
+  u8_t prot_id = comm_get_protocol_id_for_ack(seqno);
+  switch (prot_id) {
+  case COMM_PROTOCOL_CNC_ID:
+    CNC_COMM_on_ack(seqno);
+    break;
+  case COMM_PROTOCOL_FILE_ID:
+    COMM_FILE_on_ack(seqno);
+    break;
+  }
 #endif
 }
 
@@ -174,9 +219,16 @@ void COMM_cb_ack_pkt(comm *comm, comm_arg *rx, unsigned short seqno, unsigned sh
 //typedef void (*comm_app_user_err_fn)(comm *comm, int err, unsigned short seqno, unsigned short len, unsigned char *data);
 void COMM_cb_err(comm *comm, int err, unsigned short seqno, unsigned short len, unsigned char *data) {
   DBG(D_COMM, D_WARN, "COMM ERR %i seqno:0x%03x\n", err, seqno);
-  // todo report to correct protocol handler
 #ifdef CONFIG_CNC
-  CNC_COMM_on_err(seqno, err);
+  u8_t prot_id = comm_get_protocol_id_for_ack(seqno);
+  switch (prot_id) {
+  case COMM_PROTOCOL_CNC_ID:
+    CNC_COMM_on_err(seqno, err);
+    break;
+  case COMM_PROTOCOL_FILE_ID:
+    COMM_FILE_on_err(seqno, err);
+    break;
+  }
 #endif
 }
 
@@ -188,6 +240,9 @@ void COMM_cb_tra_inf(comm *comm, comm_arg *rx) {
 
 void COMM_cb_alert(comm *comm, comm_addr addr, unsigned char type, unsigned short len, unsigned char *data) {
   DBG(D_DEBUG, D_COMM, "COMM node alert addr:%02x type:%02x\n", addr, type);
+  if (comm_state.comm_beacon_handler) {
+    comm_state.comm_beacon_handler(addr, type, len, data);
+  }
 }
 
 void COMM_init() {

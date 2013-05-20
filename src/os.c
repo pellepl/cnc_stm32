@@ -776,7 +776,10 @@ u32_t OS_cond_signal(os_cond *c) {
     if (t != NULL) {
       TRACE_OS_SIGWAKED(t);
 #if CONFIG_OS_BUMP
-      os.bumped_thread = t;
+      if (os.current_thread != t) {
+        // play it nice and do not bump if thread is already running
+        os.bumped_thread = t;
+      }
 #endif
       list_delete(&c->q_block, OS_ELEMENT(t));
     }
@@ -804,7 +807,10 @@ u32_t OS_cond_broadcast(os_cond *c) {
   // wake all sleepers
   if (!list_is_empty(&c->q_sleep)) {
 #if CONFIG_OS_BUMP
-    os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
+    if (os.current_thread != OS_THREAD(list_first(&c->q_sleep))) {
+      // play it nice and do not bump if thread is already running
+      os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
+    }
 #endif
     TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_sleep)));
     list_move_all(&os.q_running, &c->q_sleep);
@@ -816,7 +822,10 @@ u32_t OS_cond_broadcast(os_cond *c) {
     // if no sleepers, bump first blocked thread
     if (!list_is_empty(&c->q_block)) {
 #if CONFIG_OS_BUMP
-      os.bumped_thread = OS_THREAD(list_first(&c->q_block));
+      if (os.current_thread != OS_THREAD(list_first(&c->q_block))) {
+        // play it nice and do not bump if thread is already running
+        os.bumped_thread = OS_THREAD(list_first(&c->q_block));
+      }
 #endif
       TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_block)));
     }

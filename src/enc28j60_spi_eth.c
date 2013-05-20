@@ -160,6 +160,9 @@ static void _eth_spi_handle_frame() {
       memcpy(ip_address, ethspi.dhcp.ipaddr, 4);
       set_ip(ethspi.dhcp.ipaddr);
       client_set_gwip(ethspi.dhcp.gwip);
+#ifdef CONFIG_ETH_DHCP_SHOW
+      print("eth ip address %i.%i.%i.%i\n", ethspi.dhcp.ipaddr[0], ethspi.dhcp.ipaddr[1], ethspi.dhcp.ipaddr[2], ethspi.dhcp.ipaddr[3]);
+#endif
     }
     return;
   }
@@ -244,16 +247,20 @@ static void *_eth_spi_irq_thread_handler(void *a) {
 #ifdef ETH_INIT_DHCP
   ETH_SPI_dhcp();
 #endif
-
+  time last_dhcp = SYS_get_time_ms();
+#ifdef CONFIG_ETH_LINK_STATUS_AT_STARTUP
+  print("ETH link up: %s\n", enc28j60linkup() ? TEXT_GOOD("ONLINE") : TEXT_BAD("OFFLINE"));
+#endif
   bool can_send = TRUE;
   while (ethspi.active) {
     // await interrupt
     if (!enc28j60hasRxPkt()) {
       OS_mutex_lock(&ethspi.irq_mutex);
       while (ethspi.active && !ethspi.irq_pending) {
-        u32_t timeout = OS_cond_timed_wait(&ethspi.irq_cond, &ethspi.irq_mutex, 2000);
-        if (timeout && !ethspi.irq_pending && ethspi.dhcp.active && dhcp_state() != DHCP_STATE_OK) {
+        (void)OS_cond_timed_wait(&ethspi.irq_cond, &ethspi.irq_mutex, 2000);
+        if (ethspi.dhcp.active && SYS_get_time_ms() - last_dhcp > 2000 && dhcp_state() != DHCP_STATE_OK) {
           // getting dhcp, retry
+          last_dhcp = SYS_get_time_ms();
           OS_mutex_unlock(&ethspi.irq_mutex);
           DBG(D_ETH, D_INFO, "ethspi request dhcp\n");
           ETH_SPI_dhcp();

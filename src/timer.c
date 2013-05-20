@@ -23,6 +23,9 @@ void TIMER_irq() {
     CNC_timer();
 #endif
     bool ms_update = SYS_timer();
+    if (ms_update) {
+      TRACE_MS_TICK(SYS_get_time_ms() & 0xff);
+    }
     TASK_timer();
 #ifdef CONFIG_LED
     LED_SHIFT_tick();

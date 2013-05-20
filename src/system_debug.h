@@ -164,6 +164,7 @@ extern volatile u32_t _trace_log_ix;
 
 #define TRACE_NAMES \
     { "<>", \
+  "ms_tick", \
   "irq_enter","irq_exit", \
   "irq_on", "irq_off", \
   "ctx_leave", "ctx_enter", \
@@ -189,7 +190,8 @@ extern volatile u32_t _trace_log_ix;
 
 typedef enum {
   _BAD = 0,
-  _TRC_OP_IRQ_ENTER = 1,
+  _TRC_OP_MS_TICK = 1,
+  _TRC_OP_IRQ_ENTER,
   _TRC_OP_IRQ_EXIT,
   _TRC_OP_IRQ_ON,
   _TRC_OP_IRQ_OFF,
@@ -213,6 +215,8 @@ typedef enum {
   _TRC_OP_OS_PREEMPTION,
   _TRC_OP_USER_MSG,
 } _trc_types ;
+
+#define TRACE_MS_TICK(ms)           TRACE_LOG(_TRC_OP_MS_TICK, ms)
 
 #define TRACE_IRQ_ENTER(irq)        TRACE_LOG(_TRC_OP_IRQ_ENTER, irq)
 #define TRACE_IRQ_EXIT(irq)         //TRACE_LOG(_TRC_OP_IRQ_EXIT, irq)
