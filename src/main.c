@@ -21,7 +21,7 @@
 #include "comm_file.h"
 #include "enc28j60_spi_eth.h"
 
-os_thread main_thread;
+os_thread kernel_thread;
 
 #ifdef DBG_OS_THREAD_BLINKY
 os_thread dbg_blinky_thread;
@@ -56,7 +56,7 @@ static void dbg_blinky_task_func(u32_t i, void *p) {
 
 // main thread loop
 
-static void *main_thread_func(void *a) {
+static void *kernel_func(void *a) {
   print(TEXT_NOTE("Kernel running...\n"));
 
   // init comm stack and connect to phy
@@ -91,10 +91,8 @@ static void *main_thread_func(void *a) {
 
 
   while (1) {
-    if (!TASK_tick()) {
-      OS_thread_yield();
-      //__WFI();
-    }
+    while (TASK_tick());
+    TASK_wait();
   }
   return 0;
 }
@@ -157,7 +155,13 @@ int main(void) {
   LED_blink(0xffffffff, 1, 0, 0);
 #endif
   HEAP_init();
+  print("Stack 0x%08x -- 0x%08x\n", STACK_START, STACK_END);
+
+  print("Subsystem initialization done\n");
+
+  OS_init();
   TASK_init();
+
 #ifdef CONFIG_SPI
   print("spif init\n");
   SPI_FLASH_M25P16_app_init();
@@ -166,13 +170,8 @@ int main(void) {
   COMM_FILE_init();
 
 #endif
-  print("Stack 0x%08x -- 0x%08x\n", STACK_START, STACK_END);
 
-  print("Subsystem initialization done\n");
-
-  OS_init();
-
-#define KERNEL_STACK_EXTRA 0x800
+  #define KERNEL_STACK_EXTRA 0x800
 
   print("Main thread stack size: %i bytes\n", __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA);
 
@@ -192,25 +191,16 @@ int main(void) {
 #endif
 
   OS_thread_create(
-      &main_thread,
+      &kernel_thread,
       OS_THREAD_FLAG_PRIVILEGED,
-      main_thread_func,
+      kernel_func,
       0,
       (void *)(STACK_START+4), __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA,
-      "main_kernel");
+      "kernel");
 
 
   while(1) {
-    print("z");
-    SYS_hardsleep_ms(100);
-#if OS_DBG_MON
-    while (UART_rx_available(_UART(STDIN))) {
-      if (UART_get_char(_UART(STDIN)) == ' ') {
-        print("DEBUG MONITOR\n");
-        OS_DBG_list_all(TRUE);
-      }
-    }
-#endif
+    __WFI();
   }
 
   return 0;

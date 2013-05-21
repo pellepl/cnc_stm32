@@ -406,8 +406,8 @@ inline void __os_enter_critical_kernel(void) {
     print("enter critical from user!!\n");
   }
   __disable_irq();
-  TRACE_IRQ_OFF(g_crit_entry);
   g_crit_entry++;
+  TRACE_IRQ_OFF(g_crit_entry);
 }
 
 // exit critical, enable interrupts
@@ -463,6 +463,7 @@ u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *a
   t->stack_start = stack;
   t->stack_end = (void*)(stack + stack_size);
   t->func = func;
+  t->prio = 128;
 
   t->this.type = OS_THREAD;
 
@@ -552,8 +553,19 @@ void OS_thread_sleep(time delay) {
 static u32_t OS_mutex_lock_internal(os_mutex *m) {
   os_thread *self = OS_thread_self();
   bool taken = TRUE;
-  ASSERT(m->owner != self);
   u32_t res = 0;
+
+  if (m->attrs & OS_MUTEX_ATTR_REENTRANT) {
+    __os_enter_critical_kernel();
+    if (m->owner == self) {
+      m->depth++;
+      __os_exit_critical_kernel();
+      return 0;
+    }
+    __os_exit_critical_kernel();
+  } else {
+    ASSERT(m->owner != self);
+  }
 
   TRACE_OS_MUTLOCK(m);
   do {
@@ -582,10 +594,15 @@ static u32_t OS_mutex_lock_internal(os_mutex *m) {
       __os_enter_critical_kernel();
       TRACE_OS_MUT_ACQLOCK(self);
       m->owner = self;
+      if (m->attrs & OS_MUTEX_ATTR_REENTRANT) {
+        m->depth = 1;
+      }
+
 #if OS_DBG_MON
       m->entered++;
 #endif
       if ((m->attrs & OS_MUTEX_ATTR_CRITICAL_IRQ) == 0) {
+        // mutex is irq safe, keep critical lock
         __os_exit_critical_kernel();
       }
 
@@ -600,11 +617,23 @@ u32_t OS_mutex_lock(os_mutex *m) {
   return r;
 }
 
-u32_t OS_mutex_unlock_internal(os_mutex *m) {
+u32_t OS_mutex_unlock_internal(os_mutex *m, bool full) {
   ASSERT(m->owner == OS_thread_self());
 
   // reinsert all waiting threads to running queue
   __os_enter_critical_kernel();
+  if (m->attrs & OS_MUTEX_ATTR_REENTRANT) {
+    if (full) {
+      // full reentrant unlock
+      m->depth = 0;
+    }
+    if (m->depth > 0) {
+      m->depth--;
+      __os_exit_critical_kernel();
+      return m->depth + 1;
+    }
+  }
+
   TRACE_OS_MUTUNLOCK(m);
   list_move_all(&os.q_running, &m->q_block);
   // reset mutex
@@ -620,6 +649,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
   if (m->attrs & OS_MUTEX_ATTR_CRITICAL_EXIT) {
     __os_reset_critical_kernel();
   } else if (m->attrs & OS_MUTEX_ATTR_CRITICAL_IRQ) {
+    // mutex was irq safe, release the extra critical lock taken on mutex_lock
     __os_exit_critical_kernel();
   }
 
@@ -629,7 +659,7 @@ u32_t OS_mutex_unlock_internal(os_mutex *m) {
 
 u32_t OS_mutex_unlock(os_mutex *m) {
   u32_t r;
-  r = OS_mutex_unlock_internal(m);
+  r = OS_mutex_unlock_internal(m, FALSE);
   return r;
 }
 
@@ -637,7 +667,17 @@ bool OS_mutex_try_lock(os_mutex *m) {
   os_thread *self = OS_thread_self();
   bool taken = TRUE;
 
-  ASSERT(m->owner != self);
+  if (m->attrs & OS_MUTEX_ATTR_REENTRANT) {
+    __os_enter_critical_kernel();
+    if (m->owner == self) {
+      m->depth++;
+      __os_exit_critical_kernel();
+      return TRUE;
+    }
+    __os_exit_critical_kernel();
+  } else {
+    ASSERT(m->owner != self);
+  }
 
   TRACE_OS_MUTLOCK(m);
 
@@ -659,6 +699,9 @@ bool OS_mutex_try_lock(os_mutex *m) {
 
   TRACE_OS_MUT_ACQLOCK(m);
   m->owner = self;
+  if (m->attrs & OS_MUTEX_ATTR_REENTRANT) {
+    m->depth = 1;
+  }
 
   return TRUE;
 }
@@ -689,7 +732,9 @@ u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
   __os_enter_critical_kernel();
   TRACE_OS_CONDWAIT(c);
   //ASSERT(strcmp("main_kernel", self->name) != 0);
-  (void)OS_mutex_unlock_internal(m);
+  if (m) {
+    (void)OS_mutex_unlock_internal(m, TRUE);
+  }
   list_delete(&os.q_running, OS_ELEMENT(self));
   list_add(&c->q_block, OS_ELEMENT(self));
   c->mutex = m;
@@ -698,7 +743,9 @@ u32_t OS_cond_wait(os_cond *c, os_mutex *m) {
 #endif
   __os_exit_critical_kernel();
   r = OS_thread_yield();
-  (void)OS_mutex_lock_internal(m);
+  if (m) {
+    (void)OS_mutex_lock_internal(m);
+  }
   return r;
 }
 
@@ -713,7 +760,9 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
 
   TRACE_OS_CONDTIMWAIT(c);
 
-  (void)OS_mutex_unlock_internal(m);
+  if (m) {
+    (void)OS_mutex_unlock_internal(m, TRUE);
+  }
 
   into_sleep_queue = c->has_sleepers;
   time awake = SYS_get_time_ms() + delay;
@@ -740,7 +789,9 @@ u32_t OS_cond_timed_wait(os_cond *c, os_mutex *m, time delay) {
 #endif
   __os_exit_critical_kernel();
   r = OS_thread_yield();
-  (void)OS_mutex_lock_internal(m);
+  if (m) {
+    (void)OS_mutex_lock_internal(m);
+  }
   return r;
 }
 
@@ -756,12 +807,12 @@ u32_t OS_cond_signal(os_cond *c) {
     // wake up first timed waiter
     t = OS_THREAD(list_first(&c->q_sleep));
     TRACE_OS_SIGWAKED(t);
-#if CONFIG_OS_BUMP
     if (os.current_thread != t) {
+#if CONFIG_OS_BUMP
       // play it nice and do not bump if thread is already running
       os.bumped_thread = t;
-    }
 #endif
+    }
     list_delete(&c->q_sleep, OS_ELEMENT(t));
     // did the condition's sleep queue become empty?
     if (list_is_empty(&c->q_sleep)) {
@@ -775,12 +826,12 @@ u32_t OS_cond_signal(os_cond *c) {
     t = OS_THREAD(list_first(&c->q_block));
     if (t != NULL) {
       TRACE_OS_SIGWAKED(t);
-#if CONFIG_OS_BUMP
       if (os.current_thread != t) {
+#if CONFIG_OS_BUMP
         // play it nice and do not bump if thread is already running
         os.bumped_thread = t;
-      }
 #endif
+      }
       list_delete(&c->q_block, OS_ELEMENT(t));
     }
   }
@@ -806,12 +857,12 @@ u32_t OS_cond_broadcast(os_cond *c) {
 
   // wake all sleepers
   if (!list_is_empty(&c->q_sleep)) {
-#if CONFIG_OS_BUMP
     if (os.current_thread != OS_THREAD(list_first(&c->q_sleep))) {
+#if CONFIG_OS_BUMP
       // play it nice and do not bump if thread is already running
       os.bumped_thread = OS_THREAD(list_first(&c->q_sleep));
-    }
 #endif
+    }
     TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_sleep)));
     list_move_all(&os.q_running, &c->q_sleep);
     //  remove condition from os sleep queue and update first_awake value.
@@ -821,12 +872,12 @@ u32_t OS_cond_broadcast(os_cond *c) {
   } else {
     // if no sleepers, bump first blocked thread
     if (!list_is_empty(&c->q_block)) {
-#if CONFIG_OS_BUMP
       if (os.current_thread != OS_THREAD(list_first(&c->q_block))) {
+#if CONFIG_OS_BUMP
         // play it nice and do not bump if thread is already running
         os.bumped_thread = OS_THREAD(list_first(&c->q_block));
-      }
 #endif
+      }
       TRACE_OS_SIGWAKED(OS_THREAD(list_first(&c->q_block)));
     }
   }
@@ -979,7 +1030,7 @@ bool OS_DBG_print_mutex(os_mutex *m, bool detail, int indent) {
   char tab[32];
   memset(tab, ' ', sizeof(tab));
   tab[indent] = 0;
-  print("%smutex  id:%04x  addr:%08x  lock:%08x  attr:%08x\n", tab, m->id, m, m->lock, m->attrs);
+  print("%smutex  id:%04x  addr:%08x  lock:%08x  attr:%08x  depth:%i\n", tab, m->id, m, m->lock, m->attrs, m->depth);
   if (!detail) return TRUE;
   print("%s       owner: ", tab);
   if (!OS_DBG_print_thread(m->owner, FALSE, indent+2)) {

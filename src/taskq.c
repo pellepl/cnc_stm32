@@ -17,6 +17,7 @@ static struct {
   task* current;
   task_timer *first_timer;
   volatile bool tim_lock;
+  os_cond cond;
 } task_sys;
 
 static struct {
@@ -123,6 +124,7 @@ void TASK_init() {
     task_pool.task[i]._ix = i;
     task_pool.mask[i/32] |= (1<<(i&0x1f));
   }
+  OS_cond_init(&task_sys.cond);
 }
 
 static task* TASK_snatch_free(int dir) {
@@ -193,6 +195,7 @@ void TASK_run(task* task, u32_t arg, void* arg_p) {
   // would same task be added twice or more, this at least fixes endless loop
   task->_next = 0;
   task->run_requests++;
+  OS_cond_signal(&task_sys.cond);
   __os_exit_critical_kernel();
 }
 
@@ -250,6 +253,12 @@ u32_t TASK_id() {
 
 u8_t TASK_is_running(task* t) {
   return t->flags & TASK_RUN;
+}
+
+void TASK_wait() {
+  while (task_sys.head == 0) {
+    OS_cond_wait(&task_sys.cond, NULL);
+  }
 }
 
 u32_t TASK_tick() {

@@ -27,6 +27,7 @@ typedef struct os_object_t {
 typedef struct os_thread_t {
   os_object this;
   u32_t id;
+  u8_t prio;
   void * sp; // The current stack pointer
   u32_t flags; // Status flags
   list_t q_join;
@@ -43,6 +44,7 @@ typedef struct os_mutex_t {
   u32_t attrs;
   os_thread *owner;
   list_t q_block;
+  u16_t depth;
 #if OS_DBG_MON
   u32_t entered;
   u32_t exited;
@@ -74,6 +76,7 @@ typedef struct os_cond_t {
  * to full exit when mutex is released
  */
 #define OS_MUTEX_ATTR_CRITICAL_EXIT    (1<<1)
+#define OS_MUTEX_ATTR_REENTRANT        (1<<2)
 
 u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *arg, void *stack, u32_t stack_size, const char *name);
 u32_t OS_thread_id(os_thread *t);

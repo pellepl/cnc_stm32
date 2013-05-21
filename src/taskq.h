@@ -103,6 +103,7 @@ void TASK_set_timer_recurrence(task_timer* timer, time recurrent_time);
 void TASK_stop_timer(task_timer* timer);
 
 u32_t TASK_tick();
+void TASK_wait();
 void TASK_timer();
 void TASK_dump();
 

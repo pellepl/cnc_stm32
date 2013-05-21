@@ -110,6 +110,8 @@ void SYS_assert(const char* file, int line) {
   UART_tx_flush(_UART(STDOUT));
   OS_DBG_list_all(TRUE);
   UART_tx_flush(_UART(STDOUT));
+  TASK_dump();
+  UART_tx_flush(_UART(STDOUT));
   SYS_dump_trace();
   UART_tx_flush(_UART(STDOUT));
   const int ASSERT_BLINK = 0x100000;
