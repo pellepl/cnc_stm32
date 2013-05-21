@@ -180,7 +180,13 @@ void SYS_dump_trace() {
 #ifdef DBG_TRACE_MON
   const char *msg_text[] = TRACE_NAMES;
   const char *irq_text[] = TRACE_IRQ_NAMES;
+  char cur_thread[16];
+
   __disable_irq();
+
+  memset(cur_thread, ' ', sizeof(cur_thread));
+  cur_thread[sizeof(cur_thread)-1] = 0;
+
   bool old_sync_tx = UART_sync_tx(_UART(STDOUT), TRUE);
   UART_tx_flush(_UART(STDOUT));
   u32_t s_ix = _trace_log_ix;
@@ -229,17 +235,29 @@ void SYS_dump_trace() {
     case _TRC_OP_OS_DEAD:
       t = OS_DBG_get_thread_by_id(arg);
       if (t != NULL) {
-        print("%s  %s\n", msg_text[op], t->name);
+        if (op == _TRC_OP_OS_CTX_ENTER) {
+          // use new thread name as prefix
+          memset(cur_thread, ' ', sizeof(cur_thread)-1);
+          if (t->name) {
+            strncpy(cur_thread, t->name, sizeof(cur_thread)-2);
+          } else {
+            itoan(t->id, cur_thread, 10, sizeof(cur_thread)-2);
+          }
+        }
+        print("%s  %s  %s\n", cur_thread, msg_text[op], t->name);
       } else {
-        print(TEXT_BAD("%s  thread id: %02x\n"), msg_text[op], arg);
+        print(TEXT_BAD("%s  %s  thread id: %02x\n"), cur_thread, msg_text[op], arg);
       }
       break;
     case _TRC_OP_IRQ_ENTER:
     case _TRC_OP_IRQ_EXIT:
-      print("%s  %s\n", msg_text[op], irq_text[arg]);
+      print("%s  %s  %s\n", cur_thread, msg_text[op], irq_text[arg]);
       break;
+    case _TRC_OP_OS_SLEEP:
+      memset(cur_thread, ' ', sizeof(cur_thread)-1);
+      // fall through
     default:
-      print("%s  %02x\n", msg_text[op], arg);
+      print("%s  %s  %02x\n", cur_thread, msg_text[op], arg);
       break;
     }
   };
