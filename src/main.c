@@ -29,9 +29,9 @@ u32_t dbg_blinky_stack[500];
 static void *dbg_blinky_thread_func(void *a) {
   while (TRUE) {
     GPIO_disable(GPIOC, GPIO_Pin_7);
-    OS_thread_sleep(950);
+    OS_thread_sleep(990);
     GPIO_enable(GPIOC, GPIO_Pin_7);
-    OS_thread_sleep(50);
+    OS_thread_sleep(10);
   }
   return NULL;
 }
@@ -44,11 +44,11 @@ static bool _dbg_bl_state = TRUE;
 static void dbg_blinky_task_func(u32_t i, void *p) {
   if (_dbg_bl_state) {
     GPIO_disable(GPIOC, GPIO_Pin_6);
-    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 50);
+    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 10);
     _dbg_bl_state = FALSE;
   } else {
     GPIO_enable(GPIOC, GPIO_Pin_6);
-    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 950);
+    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 990);
     _dbg_bl_state = TRUE;
   }
 }

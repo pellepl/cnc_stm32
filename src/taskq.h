@@ -32,6 +32,7 @@ typedef struct task_s {
 } task;
 
 typedef struct task_timer_s {
+  u8_t _ix;
   task *task;
   time start_time;
   time recurrent_time;

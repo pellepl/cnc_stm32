@@ -288,7 +288,7 @@ static void __os_sleepers_update(list_t *q, time now) {
       // it was a thread, simply move from sleeping to running
       os_thread *t = OS_THREAD(e);
       __os_enter_critical_kernel();
-      TRACE_OS_TIMWAKED(t);
+      TRACE_OS_THRWAKED(t);
       list_delete(q, e);
       list_add(&os.q_running, e);
       list_set_order(e, OS_FOREVER);
@@ -303,6 +303,7 @@ static void __os_sleepers_update(list_t *q, time now) {
       // it was a conditional, recurse into conditional's sleep queue
       os_cond *c = OS_COND(e);
       if (now >= e->sort_order) {
+        TRACE_OS_CONDTIMWAKED(c);
         __os_sleepers_update(&c->q_sleep, now);
         __os_enter_critical_kernel();
         if (list_is_empty(&c->q_sleep)) {

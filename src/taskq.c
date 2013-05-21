@@ -25,6 +25,8 @@ static struct {
   u32_t mask[((_TASK_POOL-1)/32)+1];
 } task_pool;
 
+static u8_t _g_timer_ix = 0;
+
 static void TASK_insert_timer(task_timer *timer, time actual_time);
 
 static void print_task(task *t, const char *prefix) {
@@ -195,6 +197,7 @@ void TASK_run(task* task, u32_t arg, void* arg_p) {
   // would same task be added twice or more, this at least fixes endless loop
   task->_next = 0;
   task->run_requests++;
+  TRACE_TASK_RUN(task->_ix);
   OS_cond_signal(&task_sys.cond);
   __os_exit_critical_kernel();
 }
@@ -204,6 +207,7 @@ void TASK_start_timer(task *task, task_timer* timer, u32_t arg, void *arg_p, tim
   __os_enter_critical_kernel();
   task_sys.tim_lock = TRUE;
   ASSERT(timer->alive == FALSE);
+  timer->_ix = _g_timer_ix++;
   timer->arg = arg;
   timer->arg_p = arg_p;
   timer->task = task;
@@ -313,6 +317,7 @@ u32_t TASK_tick() {
     time then = SYS_get_tick();
 #endif
     t->flags |= TASK_EXE;
+    TRACE_TASK_ENTER(t->_ix);
     do {
       t->f(t->arg, t->arg_p);
 
@@ -323,6 +328,7 @@ u32_t TASK_tick() {
       run_requests = t->run_requests;
       __os_exit_critical_kernel();
     } while (run_requests > 0);
+    TRACE_TASK_EXIT(t->_ix);
     t->flags &= ~TASK_EXE;
 #if TASK_WARN_HIGH_EXE_TIME > 0
     time delta = SYS_get_tick() - then;
@@ -379,6 +385,7 @@ void TASK_timer() {
     __os_enter_critical_kernel();
     if (!TASK_is_running(cur_timer->task) && cur_timer->alive) {
       // expired, schedule for run
+      TRACE_TASK_TIMER(cur_timer->_ix);
       TASK_run(cur_timer->task, cur_timer->arg, cur_timer->arg_p);
     }
     old_timer = cur_timer;

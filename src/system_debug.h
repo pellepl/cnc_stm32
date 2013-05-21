@@ -170,8 +170,10 @@ extern volatile u32_t _trace_log_ix;
   "ctx_leave", "ctx_enter", \
   "thr_create", "thr_yield", "thr_sleep", "thr_dead", \
   "mutex_lock", "mutex_acquire", "mutex_wait", "mutex_unlock", \
-  "cond_wait", "cond_timwait", "cond_signal", "cond_sig_waked", "cond_broadcast", "cond_tim_waked", "os_sleep", \
+  "cond_wait", "cond_tim_wait", "cond_signal", "cond_sig_waked", "cond_broadcast", "cond_tim_waked", \
+  "thr_wakeup", "os_sleep", \
   "preemption", \
+  "task_run", "task_enter", "task_exit", "task_timer", \
   "user_msg" \
     }
 
@@ -210,9 +212,14 @@ typedef enum {
   _TRC_OP_OS_CONDSIG,
   _TRC_OP_OS_SIGWAKED,
   _TRC_OP_OS_CONDBROAD,
-  _TRC_OP_OS_TIMWAKED,
+  _TRC_OP_OS_CONDTIMWAKED,
+  _TRC_OP_OS_THRWAKED,
   _TRC_OP_OS_SLEEP,
   _TRC_OP_OS_PREEMPTION,
+  _TRC_OP_TASK_RUN,
+  _TRC_OP_TASK_ENTER,
+  _TRC_OP_TASK_EXIT,
+  _TRC_OP_TASK_TIMER,
   _TRC_OP_USER_MSG,
 } _trc_types ;
 
@@ -239,9 +246,16 @@ typedef enum {
 #define TRACE_OS_CONDSIG(c)         TRACE_LOG(_TRC_OP_OS_CONDSIG, (c)->id)
 #define TRACE_OS_SIGWAKED(thr)      TRACE_LOG(_TRC_OP_OS_SIGWAKED, (thr)->id)
 #define TRACE_OS_CONDBROAD(c)       TRACE_LOG(_TRC_OP_OS_CONDBROAD, (c)->id)
-#define TRACE_OS_TIMWAKED(thr)      TRACE_LOG(_TRC_OP_OS_TIMWAKED, (thr)->id)
+#define TRACE_OS_CONDTIMWAKED(c)    TRACE_LOG(_TRC_OP_OS_CONDTIMWAKED, (c)->id)
+#define TRACE_OS_THRWAKED(thr)      TRACE_LOG(_TRC_OP_OS_THRWAKED, (thr)->id)
 #define TRACE_OS_SLEEP(x)           TRACE_LOG(_TRC_OP_OS_SLEEP, x)
 #define TRACE_OS_PREEMPTION(x)      TRACE_LOG(_TRC_OP_OS_PREEMPTION, x)
+
+#define TRACE_TASK_RUN(x)           TRACE_LOG(_TRC_OP_TASK_RUN, x)
+#define TRACE_TASK_ENTER(x)         TRACE_LOG(_TRC_OP_TASK_ENTER, x)
+#define TRACE_TASK_EXIT(x)          TRACE_LOG(_TRC_OP_TASK_EXIT, x)
+#define TRACE_TASK_TIMER(x)         TRACE_LOG(_TRC_OP_TASK_TIMER, x)
+
 
 #define TRACE_USR_MSG(m)         TRACE_LOG(_TRC_OP_USER_MSG, m)
 

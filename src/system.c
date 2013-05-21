@@ -184,7 +184,7 @@ void SYS_dump_trace() {
 
   __disable_irq();
 
-  memset(cur_thread, ' ', sizeof(cur_thread));
+  memset(cur_thread, '.', sizeof(cur_thread));
   cur_thread[sizeof(cur_thread)-1] = 0;
 
   bool old_sync_tx = UART_sync_tx(_UART(STDOUT), TRUE);
@@ -231,22 +231,30 @@ void SYS_dump_trace() {
     case _TRC_OP_OS_MUTACQ_LOCK:
     case _TRC_OP_OS_MUTWAIT_LOCK:
     case _TRC_OP_OS_SIGWAKED:
-    case _TRC_OP_OS_TIMWAKED:
+    case _TRC_OP_OS_THRWAKED:
     case _TRC_OP_OS_DEAD:
       t = OS_DBG_get_thread_by_id(arg);
       if (t != NULL) {
         if (op == _TRC_OP_OS_CTX_ENTER) {
           // use new thread name as prefix
-          memset(cur_thread, ' ', sizeof(cur_thread)-1);
           if (t->name) {
             strncpy(cur_thread, t->name, sizeof(cur_thread)-2);
           } else {
             itoan(t->id, cur_thread, 10, sizeof(cur_thread)-2);
           }
+          int l = strlen(cur_thread);
+          memset(cur_thread + l, ' ', (sizeof(cur_thread)-1) - l);
+        } else if (op == _TRC_OP_OS_CTX_LEAVE) {
+          memset(cur_thread, ' ', sizeof(cur_thread)-1);
         }
         print("%s  %s  %s\n", cur_thread, msg_text[op], t->name);
       } else {
-        print(TEXT_BAD("%s  %s  thread id: %02x\n"), cur_thread, msg_text[op], arg);
+        if (op == _TRC_OP_OS_CTX_ENTER) {
+          memset(cur_thread, '?', sizeof(cur_thread)-1);
+        } else if (op == _TRC_OP_OS_CTX_LEAVE) {
+          memset(cur_thread, ' ', sizeof(cur_thread)-1);
+        }
+        print(TEXT_BAD("%s  %s  unknown thread id: %02x\n"), cur_thread, msg_text[op], arg);
       }
       break;
     case _TRC_OP_IRQ_ENTER:
