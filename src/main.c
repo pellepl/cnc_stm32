@@ -2,7 +2,8 @@
 #include "system.h"
 #include "uart.h"
 #include "timer.h"
-#include "cnc_comm.h"
+#include "comm_proto_sys.h"
+#include "comm_proto_cnc.h"
 #include "cnc_control.h"
 #include "comm_impl.h"
 #include "miniutils.h"
@@ -18,7 +19,7 @@
 #include "linker_symaccess.h"
 #include "bl_exec.h"
 #include "spi_flash_m25p16.h"
-#include "comm_file.h"
+#include "comm_proto_file.h"
 #include "enc28j60_spi_eth.h"
 
 os_thread kernel_thread;
@@ -65,8 +66,10 @@ static void *kernel_func(void *a) {
   COMM_init();
   // TODO PETER COMM_set_stack(COMM_UART_get_comm());
   COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
+  COMM_SYS_init();
+  COMM_FILE_init();
 #ifdef CONFIG_CNC
-  CNC_COMM_init();
+  COMM_CNC_init();
 #endif
 
   ETH_SPI_init();
@@ -167,7 +170,6 @@ int main(void) {
   SPI_FLASH_M25P16_app_init();
   res = SPI_FLASH_open(SPI_FLASH, main_spi_cb);
   print("spif open res %i\n", res);
-  COMM_FILE_init();
 
 #endif
 

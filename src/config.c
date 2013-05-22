@@ -8,7 +8,7 @@
 #include "miniutils.h"
 #include "nvstorage.h"
 #include "system.h"
-#include "cnc_comm.h"
+#include "comm_proto_cnc.h"
 #include "cnc_control.h"
 
 s32_t CONFIG_load() {
@@ -28,11 +28,11 @@ s32_t CONFIG_load() {
 #ifdef CONFIG_CNC
     res = NVS_read(NV_RAM, CONFIG_NVR_CNC_SR_TIM_REC_A, &d);
     if (res == NV_OK) {
-      CNC_COMM_set_sr_timer_recurrence(d);
+      COMM_CNC_set_sr_timer_recurrence(d);
     }
     res = NVS_read(NV_RAM, CONFIG_NVR_CNC_POS_TIM_REC_A, &d);
     if (res == NV_OK) {
-      CNC_COMM_set_pos_timer_recurrence(d);
+      COMM_CNC_set_pos_timer_recurrence(d);
     }
 #endif
   } else {
@@ -56,9 +56,9 @@ s32_t CONFIG_store() {
     res = NVS_write(NV_RAM, CONFIG_NVR_DBG_LEVEL_A, SYS_dbg_get_level());
     if (res != NV_OK) break;
 #ifdef CONFIG_CNC
-    res = NVS_write(NV_RAM, CONFIG_NVR_CNC_SR_TIM_REC_A, CNC_COMM_get_sr_timer_recurrence());
+    res = NVS_write(NV_RAM, CONFIG_NVR_CNC_SR_TIM_REC_A, COMM_CNC_get_sr_timer_recurrence());
     if (res != NV_OK) break;
-    res = NVS_write(NV_RAM, CONFIG_NVR_CNC_POS_TIM_REC_A, CNC_COMM_get_pos_timer_recurrence());
+    res = NVS_write(NV_RAM, CONFIG_NVR_CNC_POS_TIM_REC_A, COMM_CNC_get_pos_timer_recurrence());
     if (res != NV_OK) break;
 #endif
 

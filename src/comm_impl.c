@@ -1,7 +1,8 @@
 #include "comm_impl.h"
 #include "system.h"
-#include "cnc_comm.h"
-#include "comm_file.h"
+#include "comm_proto_sys.h"
+#include "comm_proto_cnc.h"
+#include "comm_proto_file.h"
 
 #define COMM_IMPL_PROTOCOL_HANDLER_REG  16
 
@@ -172,8 +173,11 @@ int COMM_cb_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsigned char 
 
 #ifdef CONFIG_CNC
   switch (data[0]) {
+  case COMM_PROTOCOL_SYS_ID:
+    res = COMM_SYS_on_pkt(rx->seqno, &data[1], len-1, already_received);
+    break;
   case COMM_PROTOCOL_CNC_ID:
-    res = CNC_COMM_on_pkt(rx->seqno, &data[1], len-1, already_received);
+    res = COMM_CNC_on_pkt(rx->seqno, &data[1], len-1, already_received);
     break;
   case COMM_PROTOCOL_FILE_ID:
     res = COMM_FILE_on_pkt(&data[0], len, already_received);
@@ -205,8 +209,11 @@ void COMM_cb_ack_pkt(comm *comm, comm_arg *rx, unsigned short seqno, unsigned sh
 #ifdef CONFIG_CNC
   u8_t prot_id = comm_get_protocol_id_for_ack(seqno);
   switch (prot_id) {
+  case COMM_PROTOCOL_SYS_ID:
+    COMM_SYS_on_ack(seqno);
+    break;
   case COMM_PROTOCOL_CNC_ID:
-    CNC_COMM_on_ack(seqno);
+    COMM_CNC_on_ack(seqno);
     break;
   case COMM_PROTOCOL_FILE_ID:
     COMM_FILE_on_ack(seqno);
@@ -222,8 +229,11 @@ void COMM_cb_err(comm *comm, int err, unsigned short seqno, unsigned short len, 
 #ifdef CONFIG_CNC
   u8_t prot_id = comm_get_protocol_id_for_ack(seqno);
   switch (prot_id) {
+  case COMM_PROTOCOL_SYS_ID:
+    COMM_SYS_on_err(seqno, err);
+    break;
   case COMM_PROTOCOL_CNC_ID:
-    CNC_COMM_on_err(seqno, err);
+    COMM_CNC_on_err(seqno, err);
     break;
   case COMM_PROTOCOL_FILE_ID:
     COMM_FILE_on_err(seqno, err);
@@ -255,7 +265,7 @@ void COMM_init() {
 int COMM_dump() {
   int i,j;
   print("COMM\n----\n");
-  print("  version %08x\n", CNC_COMM_VERSION);
+  print("  version %08x\n", COMM_CNC_VERSION);
 #if COMM_IMPL_STATS
   print("  stat rx count:%i sequence:%i miss:%i resent:%i avgthruput:%ibytes/s\n",
       pktcount_rx, inseq_count, outofseq_count, resent_count, avg_byps);

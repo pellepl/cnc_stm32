@@ -9,9 +9,9 @@
 #include "stm32f10x.h"
 #include "system.h"
 #include "heap.h"
-#include "cnc_comm.h"
+#include "comm_proto_cnc.h"
 #include "comm.h"
-#include "comm_file.h"
+#include "comm_proto_file.h"
 #include "os.h"
 #include "enc28j60_spi_eth.h"
 
@@ -112,7 +112,7 @@ static void *COMM_UDP_thread_func(void *arg) {
 
           while (i < len - UDP_DATA_P && !fin && res == R_COMM_OK) {
             res = ecomm.driver.phy.up_rx_f(&ecomm.driver, ecomm.rx_frame[i + UDP_DATA_P],
-                &fin);
+                (unsigned char*)&fin);
             i++;
           }
           DBG(D_COMM, D_DEBUG, "COMM UDP rx frame comm stack res:%i fin:%i\n", res, fin);

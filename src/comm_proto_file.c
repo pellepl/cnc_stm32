@@ -1,6 +1,6 @@
-#include "comm_file.h"
+#include "comm_proto_file.h"
+#include "comm_proto_sys.h"
 #include "comm_impl.h"
-#include "cnc_comm.h"
 #include "miniutils.h"
 #include "spi_flash.h"
 #include "spi_flash_m25p16.h"
@@ -66,7 +66,14 @@ static struct {
   fw_upgrade_info fw_info;
 
   u8_t watchdog;
+
 } state;
+
+static comm_sys_cb event_cb;
+
+static void _comm_file_reset() {
+  memset(&state, 0, sizeof(state));
+}
 
 static void _comm_file_spif_cb_abort(u8_t err) {
   comm_file_ack ack;
@@ -361,13 +368,14 @@ void COMM_FILE_on_ack(u16_t seqno) {
 void COMM_FILE_on_err(u16_t seqno, s32_t err) {
 }
 
-void COMM_FILE_watchdog() {
-  if (state.active && state.watchdog++ > 5) {
+static void comm_file_event_cb(enum comm_sys_cb_event event) {
+  if (event == TICK && state.active && state.watchdog++ > 3) {
     DBG(D_SYS, D_WARN, "COMMFILE ERR WATCHDOG reset\n");
-    COMM_FILE_init();
+    _comm_file_reset();
   }
 }
 
 void COMM_FILE_init() {
-  memset(&state, 0, sizeof(state));
+  _comm_file_reset();
+  COMM_SYS_register_event_cb(&event_cb, comm_file_event_cb);
 }

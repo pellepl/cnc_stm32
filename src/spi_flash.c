@@ -13,18 +13,18 @@
 
 #ifdef CONFIG_SPI
 
-static int SPI_FLASH_send_write_sequence(spi_flash_dev *sfd);
-static int SPI_FLASH_send_erase_sequence(spi_flash_dev *sfd);
+static int spi_flash_send_write_sequence(spi_flash_dev *sfd);
+static int spi_flash_send_erase_sequence(spi_flash_dev *sfd);
 #ifdef CONFIG_SPI_CHUNK_RX
 static int SPI_FLASH_send_read_sequence(spi_flash_dev *sfd);
 #endif
 
-static int SPI_FLASH_exec(spi_flash_dev *sfd, spi_dev_sequence *seq, u8_t seq_len) {
+static int spi_flash_exec(spi_flash_dev *sfd, spi_dev_sequence *seq, u8_t seq_len) {
   LED_blink_single(LED_SPI_FLASH_BIT, 2,1, LED_BLINK_FOREVER);
   return SPI_DEV_sequence(&sfd->dev, seq, seq_len);
 }
 
-static void SPI_FLASH_finalize(spi_flash_dev *sfd, int res) {
+static void spi_flash_finalize(spi_flash_dev *sfd, int res) {
   LED_blink_single(LED_SPI_FLASH_BIT, 2,1,2);
   if (res != SPI_OK) {
     LED_blink_single(LED_ERROR1_BIT, 6, 4, 5);
@@ -35,7 +35,7 @@ static void SPI_FLASH_finalize(spi_flash_dev *sfd, int res) {
   }
 }
 
-static void SPI_FLASH_call_task_within_time(spi_flash_dev *sfd, u32_t time, int res) {
+static void spi_flash_call_task_within_time(spi_flash_dev *sfd, u32_t time, int res) {
   if (sfd->flash_conf.busy_poll_divisor > 0) {
     u32_t poll_time = time / sfd->flash_conf.busy_poll_divisor;
     if (poll_time < sfd->flash_conf.busy_poll_min_time) {
@@ -51,7 +51,7 @@ static void SPI_FLASH_call_task_within_time(spi_flash_dev *sfd, u32_t time, int 
   }
 }
 
-static void SPI_FLASH_set_first_seq_to_wren(spi_flash_dev *sfd) {
+static void spi_flash_set_first_seq_to_wren(spi_flash_dev *sfd) {
   sfd->sequence_buf[0].tx = (u8_t*)&sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_WRITE_ENABLE];
   sfd->sequence_buf[0].tx_len = 1;
   sfd->sequence_buf[0].rx = 0;
@@ -59,7 +59,7 @@ static void SPI_FLASH_set_first_seq_to_wren(spi_flash_dev *sfd) {
   sfd->sequence_buf[0].cs_release = 1;
 }
 
-static void SPI_FLASH_fill_in_address(spi_flash_dev *sfd, u8_t *dst, u32_t addr) {
+static void spi_flash_fill_in_address(spi_flash_dev *sfd, u8_t *dst, u32_t addr) {
   int bytes = sfd->flash_conf.addressing_bytes + 1;
   int i;
   for (i = 0; i < bytes; i++) {
@@ -75,7 +75,7 @@ static void SPI_FLASH_fill_in_address(spi_flash_dev *sfd, u8_t *dst, u32_t addr)
 /*
  * SPI state spinner, called from spi device finished callback
  */
-static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
+static void spi_flash_update_state(spi_flash_dev *sfd) {
   int res = SPI_OK;
 
   if (sfd->busy_poll) {
@@ -120,7 +120,7 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
   // close / protect
   case SPI_FLASH_STATE_CLOSING:
     sfd->state = SPI_FLASH_STATE_CLOSED;
-    SPI_FLASH_call_task_within_time(sfd, sfd->flash_conf.time_sr_write_ms, res);
+    spi_flash_call_task_within_time(sfd, sfd->flash_conf.time_sr_write_ms, res);
     break;
 
   // read sr
@@ -158,25 +158,25 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
   // write data
   case SPI_FLASH_STATE_WRITE_SEQ:
     sfd->state = SPI_FLASH_STATE_WRITE_WAIT;
-    SPI_FLASH_call_task_within_time(sfd, sfd->flash_conf.time_page_write_ms, res);
+    spi_flash_call_task_within_time(sfd, sfd->flash_conf.time_page_write_ms, res);
     break;
 
   // erase sector
   case SPI_FLASH_STATE_ERASE_SEQ:
     sfd->state = SPI_FLASH_STATE_ERASE_WAIT;
-    SPI_FLASH_call_task_within_time(sfd, sfd->flash_conf.time_sector_erase_ms, res);
+    spi_flash_call_task_within_time(sfd, sfd->flash_conf.time_sector_erase_ms, res);
     break;
 
   // protect/unprotect
   case SPI_FLASH_STATE_WRSR_SEQ:
     sfd->state = SPI_FLASH_STATE_WRSR_WAIT;
-    SPI_FLASH_call_task_within_time(sfd, sfd->flash_conf.time_sr_write_ms, res);
+    spi_flash_call_task_within_time(sfd, sfd->flash_conf.time_sr_write_ms, res);
     break;
 
   // mass erase
   case SPI_FLASH_STATE_MASS_ERASE:
     sfd->state = SPI_FLASH_STATE_OPENED;
-    SPI_FLASH_call_task_within_time(sfd, sfd->flash_conf.time_mass_erase_ms, res);
+    spi_flash_call_task_within_time(sfd, sfd->flash_conf.time_mass_erase_ms, res);
     break;
 
   // other
@@ -205,7 +205,7 @@ static void SPI_FLASH_update_state(spi_flash_dev *sfd) {
 /*
  * spi device result callback (might be called from irq, flag)
  */
-static void SPI_FLASH_callback_spi_result(spi_dev *dev, int res) {
+static void spi_flash_callback_spi_result(spi_dev *dev, int res) {
   spi_flash_dev *sfd = (spi_flash_dev *)((char*)dev - offsetof(spi_flash_dev, dev));
   if (res != SPI_OK) {
     DBG(D_SPI, D_WARN, "SPIF cb err i\n", res);
@@ -217,14 +217,14 @@ static void SPI_FLASH_callback_spi_result(spi_dev *dev, int res) {
     TASK_run(sfd->task, res, sfd);
     return;
   }
-  SPI_FLASH_update_state(sfd);
+  spi_flash_update_state(sfd);
 }
 
 /*
  * spi flash task function, used for reporting finished operations to user and
  * to keep state of intermediate operations
  */
-static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
+static void spi_flash_task_f(u32_t res_u, void *sfd_v) {
 
   int res = (int)res_u;
   spi_flash_dev *sfd = (spi_flash_dev *)sfd_v;
@@ -241,7 +241,7 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
     seq.rx = sfd->tmp_buf;
     seq.rx_len = 1;
     seq.cs_release = 0;
-    res = SPI_FLASH_exec(sfd, &seq, 1);
+    res = spi_flash_exec(sfd, &seq, 1);
     if (res == SPI_ERR_DEV_BUSY && sfd->poll_count < 16) {
       DBG(D_SPI, D_INFO, "SPIF poll: device busy\n");
     } else if (res != SPI_OK) {
@@ -250,7 +250,7 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
       sfd->busy_poll = FALSE;
 
       sfd->state = SPI_FLASH_STATE_ERROR;
-      SPI_FLASH_finalize(sfd, res);
+      spi_flash_finalize(sfd, res);
     }
     return;
   }
@@ -262,16 +262,16 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
     if (sfd->count > 0) {
       // more to write
       sfd->state = SPI_FLASH_STATE_WRITE_SEQ;
-      res = SPI_FLASH_send_write_sequence(sfd);
+      res = spi_flash_send_write_sequence(sfd);
       if (res != SPI_OK) {
         // error in middle of write
         sfd->state = SPI_FLASH_STATE_ERROR;
-        SPI_FLASH_finalize(sfd, res);
+        spi_flash_finalize(sfd, res);
       }
     } else {
       // finished
       sfd->state = SPI_FLASH_STATE_OPENED;
-      SPI_FLASH_finalize(sfd, res);
+      spi_flash_finalize(sfd, res);
     }
     break;
   }
@@ -279,36 +279,36 @@ static void SPI_FLASH_task_f(u32_t res_u, void *sfd_v) {
     if (sfd->count > 0) {
       // more to erase
       sfd->state = SPI_FLASH_STATE_ERASE_SEQ;
-      res = SPI_FLASH_send_erase_sequence(sfd);
+      res = spi_flash_send_erase_sequence(sfd);
       if (res != SPI_OK) {
         // error in middle of erase
         sfd->state = SPI_FLASH_STATE_ERROR;
-        SPI_FLASH_finalize(sfd, res);
+        spi_flash_finalize(sfd, res);
       }
     } else {
       // finished
       sfd->state = SPI_FLASH_STATE_OPENED;
-      SPI_FLASH_finalize(sfd, res);
+      spi_flash_finalize(sfd, res);
     }
     break;
   }
   case SPI_FLASH_STATE_CLOSED:
     if (sfd->open) {
       SPI_DEV_close(&sfd->dev);
-      SPI_FLASH_finalize(sfd, res);
+      spi_flash_finalize(sfd, res);
       sfd->open = FALSE;
     }
   break;
   case SPI_FLASH_STATE_WRSR_WAIT:
   case SPI_FLASH_STATE_OPENED:
   case SPI_FLASH_STATE_ERROR:
-    SPI_FLASH_finalize(sfd, res);
+    spi_flash_finalize(sfd, res);
   break;
   default:
     sfd->state = SPI_FLASH_STATE_ERROR;
     if (sfd->open) {
       SPI_DEV_close(&sfd->dev);
-      SPI_FLASH_finalize(sfd, res);
+      spi_flash_finalize(sfd, res);
       sfd->open = FALSE;
     }
     break;
@@ -333,11 +333,11 @@ int SPI_FLASH_open(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->sequence_buf[0].cs_release = 0;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 1);
+  return spi_flash_exec(sfd, &sfd->sequence_buf[0], 1);
 }
 
-static int SPI_FLASH_closeprotectun(spi_flash_dev *sfd, char unprotect) {
-  SPI_FLASH_set_first_seq_to_wren(sfd);
+static int spi_flash_closeprotectun(spi_flash_dev *sfd, char unprotect) {
+  spi_flash_set_first_seq_to_wren(sfd);
 
   sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_WRITE_SR];
   sfd->tmp_buf[1] = sfd->flash_conf.cmd_defs[unprotect ? SPI_FLASH_CMD_SR_UNPROTECT : SPI_FLASH_CMD_SR_PROTECT];
@@ -347,7 +347,7 @@ static int SPI_FLASH_closeprotectun(spi_flash_dev *sfd, char unprotect) {
   sfd->sequence_buf[1].rx_len = 0;
   sfd->sequence_buf[1].cs_release = 0;
 
-  return SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 2);
+  return spi_flash_exec(sfd, &sfd->sequence_buf[0], 2);
 }
 
 int SPI_FLASH_close(spi_flash_dev *sfd, spi_flash_callback cb) {
@@ -361,14 +361,14 @@ int SPI_FLASH_close(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->state = SPI_FLASH_STATE_CLOSING;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_closeprotectun(sfd, FALSE);
+  return spi_flash_closeprotectun(sfd, FALSE);
 }
 
 int SPI_FLASH_close_force(spi_flash_dev *sfd) {
   SPI_close(sfd->dev.bus);
   SPI_DEV_close(&sfd->dev);
   sfd->state = SPI_FLASH_STATE_CLOSED;
-  SPI_FLASH_finalize(sfd, SPI_OK);
+  spi_flash_finalize(sfd, SPI_OK);
   return SPI_OK;
 }
 
@@ -383,23 +383,23 @@ int SPI_FLASH_read_busy(spi_flash_dev *sfd, spi_flash_callback cb, u8_t *res) {
   seq.cs_release = 0;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_exec(sfd, &seq, 1);
+  return spi_flash_exec(sfd, &seq, 1);
 }
 
 #ifdef CONFIG_SPI_CHUNK_RX
-static int SPI_FLASH_send_read_sequence(spi_flash_dev *sfd) {
+static int spi_flash_send_read_sequence(spi_flash_dev *sfd) {
   u32_t addr = sfd->addr;
   u32_t len_to_read = MIN(sfd->dev.bus->max_buf_len, sfd->count);
 
   sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_READ];
-  SPI_FLASH_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
+  spi_flash_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
   sfd->sequence_buf[0].tx = &sfd->tmp_buf[0];
   sfd->sequence_buf[0].tx_len = 1 + sfd->flash_conf.addressing_bytes + 1;
   sfd->sequence_buf[0].rx = (u8_t*)sfd->ptr;
   sfd->sequence_buf[0].rx_len = len_to_read;
   sfd->sequence_buf[0].cs_release = 0;
 
-  int res = SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 1);
+  int res = spi_flash_exec(sfd, &sfd->sequence_buf[0], 1);
 
   if (res == SPI_OK) {
     sfd->addr += len_to_read;
@@ -424,7 +424,7 @@ int SPI_FLASH_read(spi_flash_dev *sfd, u32_t addr, u16_t size, u8_t *dest) {
   sfd->ptr = dest;
   sfd->count = size;
 
-  return SPI_FLASH_send_read_sequence(sfd);
+  return spi_flash_send_read_sequence(sfd);
 }
 
 #else
@@ -443,7 +443,7 @@ int SPI_FLASH_read(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u16_t 
   sfd->state = SPI_FLASH_STATE_READ;
 
   sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_READ];
-  SPI_FLASH_fill_in_address(sfd, &sfd->tmp_buf[1], (u32_t)addr);
+  spi_flash_fill_in_address(sfd, &sfd->tmp_buf[1], (u32_t)addr);
   sfd->sequence_buf[0].tx = &sfd->tmp_buf[0];
   sfd->sequence_buf[0].tx_len = 1 + (1+sfd->flash_conf.addressing_bytes);
   sfd->sequence_buf[0].rx = dest;
@@ -451,11 +451,11 @@ int SPI_FLASH_read(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u16_t 
   sfd->sequence_buf[0].cs_release = 0;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 1);
+  return spi_flash_exec(sfd, &sfd->sequence_buf[0], 1);
 }
 #endif
 
-static int SPI_FLASH_send_write_sequence(spi_flash_dev *sfd) {
+static int spi_flash_send_write_sequence(spi_flash_dev *sfd) {
   u32_t addr = sfd->addr;
   u32_t len_rem_page = sfd->flash_conf.size_page_write_max - (addr & (sfd->flash_conf.size_page_write_max - 1));
   u32_t len_to_write = MIN(len_rem_page, sfd->count);
@@ -463,10 +463,10 @@ static int SPI_FLASH_send_write_sequence(spi_flash_dev *sfd) {
     len_to_write = MIN(sfd->count, sfd->flash_conf.size_page_write_max);
   }
 
-  SPI_FLASH_set_first_seq_to_wren(sfd);
+  spi_flash_set_first_seq_to_wren(sfd);
 
   sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_WRITE];
-  SPI_FLASH_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
+  spi_flash_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
   sfd->sequence_buf[1].tx = &sfd->tmp_buf[0];
   sfd->sequence_buf[1].tx_len = 1 + sfd->flash_conf.addressing_bytes + 1;
   sfd->sequence_buf[1].rx = 0;
@@ -479,7 +479,7 @@ static int SPI_FLASH_send_write_sequence(spi_flash_dev *sfd) {
   sfd->sequence_buf[2].rx_len = 0;
   sfd->sequence_buf[2].cs_release = 0;
 
-  int res = SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 3);
+  int res = spi_flash_exec(sfd, &sfd->sequence_buf[0], 3);
 
   if (res == SPI_OK) {
     sfd->addr += len_to_write;
@@ -508,24 +508,24 @@ int SPI_FLASH_write(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u16_t
   sfd->count = size;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_send_write_sequence(sfd);
+  return spi_flash_send_write_sequence(sfd);
 }
 
-static int SPI_FLASH_send_erase_sequence(spi_flash_dev *sfd) {
+static int spi_flash_send_erase_sequence(spi_flash_dev *sfd) {
   u32_t addr = sfd->addr;
   u32_t len = sfd->flash_conf.size_sector_erase_min;
 
-  SPI_FLASH_set_first_seq_to_wren(sfd);
+  spi_flash_set_first_seq_to_wren(sfd);
 
   sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_SECTOR_ERASE];
-  SPI_FLASH_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
+  spi_flash_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
   sfd->sequence_buf[1].tx = &sfd->tmp_buf[0];
   sfd->sequence_buf[1].tx_len = 1 + sfd->flash_conf.addressing_bytes + 1;
   sfd->sequence_buf[1].rx = 0;
   sfd->sequence_buf[1].rx_len = 0;
   sfd->sequence_buf[1].cs_release = 0;
 
-  int res = SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 2);
+  int res = spi_flash_exec(sfd, &sfd->sequence_buf[0], 2);
 
   if (res == SPI_OK) {
     sfd->addr += len;
@@ -569,7 +569,7 @@ int SPI_FLASH_erase(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u32_t
   sfd->count = size;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_send_erase_sequence(sfd);
+  return spi_flash_send_erase_sequence(sfd);
 }
 
 int SPI_FLASH_protect(spi_flash_dev *sfd, spi_flash_callback cb) {
@@ -583,7 +583,7 @@ int SPI_FLASH_protect(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->state = SPI_FLASH_STATE_WRSR_SEQ;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_closeprotectun(sfd, FALSE);
+  return spi_flash_closeprotectun(sfd, FALSE);
 }
 
 int SPI_FLASH_unprotect(spi_flash_dev *sfd, spi_flash_callback cb) {
@@ -597,7 +597,7 @@ int SPI_FLASH_unprotect(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->state = SPI_FLASH_STATE_WRSR_SEQ;
   sfd->spi_flash_callback = cb;
 
-  return SPI_FLASH_closeprotectun(sfd, TRUE);
+  return spi_flash_closeprotectun(sfd, TRUE);
 }
 
 int SPI_FLASH_mass_erase(spi_flash_dev *sfd, spi_flash_callback cb) {
@@ -611,7 +611,7 @@ int SPI_FLASH_mass_erase(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->state = SPI_FLASH_STATE_MASS_ERASE;
   sfd->spi_flash_callback = cb;
 
-  SPI_FLASH_set_first_seq_to_wren(sfd);
+  spi_flash_set_first_seq_to_wren(sfd);
 
   sfd->sequence_buf[1].tx = (u8_t*)&sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_MASS_ERASE];
   sfd->sequence_buf[1].tx_len = 1;
@@ -619,7 +619,7 @@ int SPI_FLASH_mass_erase(spi_flash_dev *sfd, spi_flash_callback cb) {
   sfd->sequence_buf[1].rx_len = 0;
   sfd->sequence_buf[1].cs_release = 0;
 
-  return SPI_FLASH_exec(sfd, &sfd->sequence_buf[0], 2);
+  return spi_flash_exec(sfd, &sfd->sequence_buf[0], 2);
 }
 
 
@@ -629,8 +629,8 @@ int SPI_FLASH_init(spi_flash_dev *sfd, spi_flash_dev_conf *flash_conf, u16_t spi
   memcpy(&sfd->flash_conf, flash_conf, sizeof(spi_flash_dev_conf));
   //SPI_DEV_init(&sfd->dev, spi_conf, bus, cs_port, cs_pin, 0);
   SPI_DEV_init(&sfd->dev, spi_conf, bus, cs_port, cs_pin, SPI_CONF_IRQ_DRIVEN);
-  SPI_DEV_set_callback(&sfd->dev, SPI_FLASH_callback_spi_result);
-  sfd->task = TASK_create(SPI_FLASH_task_f, TASK_STATIC);
+  SPI_DEV_set_callback(&sfd->dev, spi_flash_callback_spi_result);
+  sfd->task = TASK_create(spi_flash_task_f, TASK_STATIC);
   sfd->state = SPI_FLASH_STATE_CLOSED;
   sfd->open = FALSE;
   return SPI_OK;

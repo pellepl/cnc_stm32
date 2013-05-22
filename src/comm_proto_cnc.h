@@ -1,19 +1,19 @@
 /*
- * cnc_comm.h
+ * comm_cnc.h
  *
  *  Created on: Aug 10, 2012
  *      Author: petera
  */
 
-#ifndef CNC_COMM_H_
-#define CNC_COMM_H_
+#ifndef COMM_CNC_H_
+#define COMM_CNC_H_
 
 #include "system.h"
 #include "comm.h"
 
 #define COMM_PROTOCOL_CNC_ID              0x01
 
-#define CNC_COMM_VERSION                  0x00010000
+#define COMM_CNC_VERSION                  0x00010000
 
 #define COMM_PROTOCOL_INFO                0x00
 #define COMM_PROTOCOL_CNC_ENABLE          0x01
@@ -53,16 +53,16 @@
 
 #define COMM_PROTOCOL_ALIVE               0xff
 
-void CNC_COMM_init();
-u32_t CNC_COMM_get_version();
-void CNC_COMM_set_sr_timer_recurrence(u32_t delta);
-u32_t CNC_COMM_get_sr_timer_recurrence();
-void CNC_COMM_apply_sr_timer_recurrence();
-void CNC_COMM_set_pos_timer_recurrence(u32_t delta);
-u32_t CNC_COMM_get_pos_timer_recurrence();
-void CNC_COMM_apply_pos_timer_recurrence();
-s32_t CNC_COMM_on_pkt(u16_t seq, u8_t *data, u16_t len, bool already_received);
-void CNC_COMM_on_ack(u16_t seq);
-void CNC_COMM_on_err(u16_t seq, s32_t err);
+void COMM_CNC_init();
+u32_t COMM_CNC_get_version();
+void COMM_CNC_set_sr_timer_recurrence(u32_t delta);
+u32_t COMM_CNC_get_sr_timer_recurrence();
+void COMM_CNC_apply_sr_timer_recurrence();
+void COMM_CNC_set_pos_timer_recurrence(u32_t delta);
+u32_t COMM_CNC_get_pos_timer_recurrence();
+void COMM_CNC_apply_pos_timer_recurrence();
+s32_t COMM_CNC_on_pkt(u16_t seq, u8_t *data, u16_t len, bool already_received);
+void COMM_CNC_on_ack(u16_t seq);
+void COMM_CNC_on_err(u16_t seq, s32_t err);
 
-#endif /* CNC_COMM_H_ */
+#endif /* COMM_CNC_H_ */

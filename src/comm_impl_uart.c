@@ -11,9 +11,9 @@
 #include "uart.h"
 #include "taskq.h"
 #include "heap.h"
-#include "cnc_comm.h"
+#include "comm_proto_cnc.h"
 #include "comm.h"
-#include "comm_file.h"
+#include "comm_proto_file.h"
 
 #define POOL_GUARD          0xee
 

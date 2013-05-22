@@ -28,6 +28,5 @@ void COMM_FILE_init();
 s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len, bool already_received);
 void COMM_FILE_on_ack(u16_t seqno);
 void COMM_FILE_on_err(u16_t seqno, s32_t err);
-void COMM_FILE_watchdog();
 
 #endif /* COMM_FILE_H_ */

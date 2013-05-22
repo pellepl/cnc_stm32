@@ -12,7 +12,7 @@
 #include "system.h"
 #include "cnc_control.h"
 #include "comm_impl.h"
-#include "cnc_comm.h"
+#include "comm_proto_cnc.h"
 #include "heap.h"
 #include "spi_dev.h"
 #include "led.h"
@@ -1114,8 +1114,8 @@ static int f_cnc_sr_recurrence(int delta) {
   if (_argc != 1) {
     return -1;
   } else {
-    CNC_COMM_set_sr_timer_recurrence(delta);
-    CNC_COMM_apply_sr_timer_recurrence();
+    COMM_CNC_set_sr_timer_recurrence(delta);
+    COMM_CNC_apply_sr_timer_recurrence();
   }
   return 0;
 }
@@ -1124,8 +1124,8 @@ static int f_cnc_pos_recurrence(int delta) {
   if (_argc != 1) {
     return -1;
   } else {
-    CNC_COMM_set_pos_timer_recurrence(delta);
-    CNC_COMM_apply_pos_timer_recurrence();
+    COMM_CNC_set_pos_timer_recurrence(delta);
+    COMM_CNC_apply_pos_timer_recurrence();
   }
   return 0;
 }
@@ -1988,7 +1988,7 @@ void CLI_init() {
   DBG(D_CLI, D_DEBUG, "CLI init\n");
   UART_set_callback(_UART(STDIN), CLI_uart_check_char, NULL);
   print("\n"APP_NAME"\n");
-  print("version   : %02x.%02x.%04x\n", (CNC_COMM_VERSION>>24), (CNC_COMM_VERSION>>16), CNC_COMM_VERSION & 0xffff);
+  print("version   : %02x.%02x.%04x\n", (COMM_CNC_VERSION>>24), (COMM_CNC_VERSION>>16), COMM_CNC_VERSION & 0xffff);
   print("build     : %i\n", SYS_build_number());
   print("build date: %i\n", SYS_build_date());
   print("\ntype '?' or 'help' for list of commands\n\n");

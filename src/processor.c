@@ -554,13 +554,14 @@ static void ADC_config() {
 
 static void SPI_config_bootloader() {
 #ifdef CONFIG_SPI
+  // Abort all DMA transfers
   /* Disable DMA SPI1 RX channel transfer complete interrupt */
   DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC, DISABLE);
 
   /* Disable SPI1_MASTER DMA Rx/Tx request */
   SPI_I2S_DMACmd(SPI1_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , DISABLE);
 
-  /* Disable DMA SPI1 RX channel transfer complete interrupt */
+  /* Disable DMA SPI2 RX channel transfer complete interrupt */
   DMA_ITConfig(SPI2_MASTER_Rx_DMA_Channel, DMA_IT_TC, DISABLE);
 
   /* Disable SPI1_MASTER DMA Rx/Tx request */

@@ -105,10 +105,11 @@ FILES = 	processor.c \
 			timer.c \
 			adc.c \
 			cnc_control.c \
-			cnc_comm.c \
 			comm_impl.c \
 			comm_impl_uart.c \
 			comm_impl_udp.c \
+			comm_proto_sys.c \
+			comm_proto_cnc.c \
 			miniutils.c \
 			taskq.c \
 			heap.c \
@@ -117,7 +118,7 @@ FILES = 	processor.c \
 			os.c \
 			enc28j60_spi_eth.c \
 			crc.c \
-			comm_file.c
+			comm_proto_file.c
 			
 # comm files
 include ${comm_dir}/files.mk

@@ -295,11 +295,12 @@
 
 #define USE_COLOR_CODING
 
+// console output when eth get ip from dhcp
 #define CONFIG_ETH_DHCP_SHOW
+// console output on eth link status
 #define CONFIG_ETH_LINK_STATUS_AT_STARTUP
+// console output on connect/disconnect
 #define CONFIG_COMM_STATUS
-// enable not to hangup on alive ping/pong timeouts
-//#define COMM_DBG_DONT_HANGUP
 
 /** OS **/
 
@@ -310,10 +311,15 @@
 
 /** ETH **/
 
+// busy poll counter safe guard
 #define ETH_ENC28J60_MII_POLL_GUARD   (0x10000)
+// mac address
 #define ETH_MAC {0xc0,0xff,0xee,0xca,0xfe,0x01}
+// default ip
 #define ETH_IP  {192,168,0,150}
+// start dhcp query at ethup automatically
 #define ETH_INIT_DHCP
+// collect statistics on ethernet comm
 #define ETH_STATS
 
 /** LED SHIFTER **/

@@ -5,7 +5,7 @@
  *      Author: Peter
  */
 #include "cnc_control.h"
-#include "cnc_comm.h"
+#include "comm_proto_cnc.h"
 #include "miniutils.h"
 #include "led.h"
 
