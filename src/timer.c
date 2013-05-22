@@ -26,6 +26,7 @@ void TIMER_irq() {
     if (ms_update) {
       TRACE_MS_TICK(SYS_get_time_ms() & 0xff);
     }
+
     TASK_timer();
 #ifdef CONFIG_LED
     LED_SHIFT_tick();

@@ -1110,7 +1110,9 @@ void OS_DBG_dump() {
 #ifdef OS_DUMP_IRQ
 void OS_DBG_dump_irq() {
   if(EXTI_GetITStatus(OS_DUMP_IRQ_EXTI_LINE) != RESET) {
+    __os_enter_critical_kernel();
     OS_DBG_list_all(os.preemption);
+    __os_exit_critical_kernel();
     EXTI_ClearITPendingBit(OS_DUMP_IRQ_EXTI_LINE);
   }
 }

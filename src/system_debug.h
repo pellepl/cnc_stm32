@@ -162,10 +162,20 @@ extern volatile u32_t _trace_log_ix;
   } while (0);
 
 
+#define TRACE_LOG_MS(op, var)   \
+  do {  \
+    if ((_trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)] >> 8) != _TRC_OP_MS_TICK || \
+        (_trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)] & 0xff) <= (((var) - 0x8) & 0xff)) { \
+      _trace_log[_trace_log_ix] = (((op)<<8)|((var)&0xff)); \
+      _trace_log_ix = (_trace_log_ix >= TRACE_SIZE-1) ? 0 : (_trace_log_ix + 1); \
+    } \
+  } while (0);
+
+
 #define TRACE_NAMES \
     { "<>", \
   "ms_tick", \
-  "irq_enter","irq_exit", \
+  "irq_enter","irq_exit ", \
   "irq_on", "irq_off", \
   "ctx_leave", "ctx_enter", \
   "thr_create", "thr_yield", "thr_sleep", "thr_dead", \
@@ -173,7 +183,7 @@ extern volatile u32_t _trace_log_ix;
   "cond_wait", "cond_tim_wait", "cond_signal", "cond_sig_waked", "cond_broadcast", "cond_tim_waked", \
   "thr_wakeup", "os_sleep", \
   "preemption", \
-  "task_run", "task_enter", "task_exit", "task_timer", \
+  "task_run", "task_enter", "task_exit ", "task_timer", \
   "user_msg" \
     }
 
@@ -188,6 +198,7 @@ extern volatile u32_t _trace_log_ix;
 }
 #else
 #define TRACE_LOG(op, var)
+#define TRACE_LOG_MS(op, var)
 #endif
 
 typedef enum {
@@ -223,10 +234,10 @@ typedef enum {
   _TRC_OP_USER_MSG,
 } _trc_types ;
 
-#define TRACE_MS_TICK(ms)           TRACE_LOG(_TRC_OP_MS_TICK, ms)
+#define TRACE_MS_TICK(ms)           TRACE_LOG_MS(_TRC_OP_MS_TICK, ms)
 
 #define TRACE_IRQ_ENTER(irq)        TRACE_LOG(_TRC_OP_IRQ_ENTER, irq)
-#define TRACE_IRQ_EXIT(irq)         //TRACE_LOG(_TRC_OP_IRQ_EXIT, irq)
+#define TRACE_IRQ_EXIT(irq)         TRACE_LOG(_TRC_OP_IRQ_EXIT, irq)
 
 #define TRACE_IRQ_ON(l)             //TRACE_LOG(_TRC_OP_IRQ_ON, l)
 #define TRACE_IRQ_OFF(l)            //TRACE_LOG(_TRC_OP_IRQ_OFF, l)

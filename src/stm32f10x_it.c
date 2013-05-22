@@ -181,7 +181,6 @@ void EXTI2_IRQHandler(void)
   TRACE_IRQ_ENTER(11);
   OS_DBG_dump_irq();
   SYS_dump_trace();
-
   TRACE_IRQ_EXIT(11);
 }
 #endif
@@ -191,7 +190,8 @@ void PendSV_Handler(void)
 {
   TRACE_IRQ_ENTER(12);
   __os_pendsv();
-  TRACE_IRQ_EXIT(12);
+  // cannot have trace after pendsv, this will corrupt ctx switcher
+  //TRACE_IRQ_EXIT(12);
 }
 
 void SysTick_Handler(void)
