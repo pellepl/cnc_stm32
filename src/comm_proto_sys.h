@@ -30,6 +30,7 @@ typedef struct comm_sys_cb_s {
 
 void COMM_SYS_init();
 bool COMM_SYS_is_connected();
+s32_t COMM_SYS_send_alive_packet();
 void COMM_SYS_register_event_cb(comm_sys_cb *s, comm_sys_cb_fn f);
 s32_t COMM_SYS_on_pkt(u16_t seqno, u8_t *data, u8_t len, bool already_received);
 void COMM_SYS_on_ack(u16_t seqno);

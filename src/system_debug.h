@@ -164,10 +164,12 @@ extern volatile u32_t _trace_log_ix;
 
 #define TRACE_LOG_MS(op, var)   \
   do {  \
-    if ((_trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)] >> 8) != _TRC_OP_MS_TICK || \
-        (_trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)] & 0xff) <= (((var) - 0x8) & 0xff)) { \
-      _trace_log[_trace_log_ix] = (((op)<<8)|((var)&0xff)); \
+    u16_t tmp = _trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)]; \
+    if ((tmp >> 8) != _TRC_OP_MS_TICK) { \
+      _trace_log[_trace_log_ix] = ((op)<<8); \
       _trace_log_ix = (_trace_log_ix >= TRACE_SIZE-1) ? 0 : (_trace_log_ix + 1); \
+    } else if ((tmp & 0xff) < 0xff) { \
+      _trace_log[(_trace_log_ix-1)&(TRACE_SIZE-1)] = (_TRC_OP_MS_TICK<<8) | (((tmp & 0xff) + 1) & 0xff); \
     } \
   } while (0);
 

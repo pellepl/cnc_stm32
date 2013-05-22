@@ -220,9 +220,9 @@ s32_t COMM_FILE_on_pkt(u8_t *data, u8_t len, bool already_received) {
   comm_file_hdr *h = (comm_file_hdr *)data;
   bool abort_and_tx_stop = FALSE;
 
+  DBG(D_SYS, D_DEBUG, "COMMFILE got request, seq: %08x %s\n", h->sequence, already_received ? "dupl":"");
   if (already_received) return res;
 
-  DBG(D_SYS, D_DEBUG, "COMMFILE got request, seq: %08x\n", h->sequence);
   if (h->sequence == 0xffffffff) {
     // request to store file, accepted only when inactive
     DBG(D_SYS, D_INFO, "COMMFILE header, len: %i, name: %s, crc: %04x\n", h->length, h->name, h->crc);

@@ -9,9 +9,8 @@
 #include "stm32f10x.h"
 #include "system.h"
 #include "heap.h"
-#include "comm_proto_cnc.h"
 #include "comm.h"
-#include "comm_proto_file.h"
+#include "comm_proto_sys.h"
 #include "os.h"
 #include "enc28j60_spi_eth.h"
 
@@ -34,6 +33,8 @@ static struct {
   beacon_info cur_server;
   beacon_info beacons[2];
 } ecomm;
+
+static const u8_t COMM_UDP_IP_BROADCAST[4] = {0,0,0,0};
 
 comm *COMM_UDP_get_comm() {
   return &ecomm.driver;
@@ -61,12 +62,12 @@ static int COMM_UDP_tx_buf(unsigned char *c, unsigned short len) {
 static int COMM_UDP_tx_flush(comm *comm, comm_arg* tx) {
   ecomm.tx_ix = UDP_DATA_P;
   if (ETH_SPI_tx_free()) {
-    // TODO PETER
     u16_t comm_len = tx->len + 4;
-    u8_t dip[4] = {192,168,0,102};
-    u8_t dmac[6] = {0xa4,0xba,0xdb,0xfb,0xd4,0x8d};
-    client_set_gwmac(dmac);
-    send_udp_prepare(ecomm.tx_frame, 0xcafe, dip, 0xcafe);
+    if (tx->flags & COMM_STAT_ALERT_BIT) {
+      send_udp_prepare(ecomm.tx_frame, 0xcafe, (u8_t*)COMM_UDP_IP_BROADCAST, 0xcafe);
+    } else {
+      send_udp_prepare(ecomm.tx_frame, 0xcafe, &ecomm.cur_server.ip[0], 0xcafe);
+    }
     send_udp_finalize(ecomm.tx_frame, comm_len);
     if (ETH_SPI_send(ecomm.tx_frame, UDP_HEADER_LEN+IP_HEADER_LEN+ETH_HEADER_LEN + comm_len, 0)) {
       DBG(D_COMM, D_DEBUG, "COMM UDP sent frame %i bytes\n", UDP_HEADER_LEN+IP_HEADER_LEN+ETH_HEADER_LEN+comm_len);
@@ -159,10 +160,15 @@ void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data) {
 
   memcpy(bi.mac, &ecomm.rx_frame[ETH_SRC_MAC], 6);
   memcpy(bi.ip, &ecomm.rx_frame[IP_SRC_P], 4);
-  DBG(D_COMM, D_INFO, "beacon udp ip src:  %i.%i.%i.%i\n",
+  DBG(D_COMM, D_INFO, "COMM UDP beacon udp ip src:  %i.%i.%i.%i\n",
       bi.ip[0], bi.ip[1], bi.ip[2], bi.ip[3]);
-  DBG(D_COMM, D_INFO, "beacon udp mac src: %02x.%02x.%02x.%02x.%02x.%02x\n",
+  DBG(D_COMM, D_INFO, "COMM UDP beacon udp mac src: %02x.%02x.%02x.%02x.%02x.%02x\n",
       bi.mac[0], bi.mac[1], bi.mac[2], bi.mac[3], bi.mac[4], bi.mac[5]);
+  if (!COMM_SYS_is_connected()) {
+    memcpy(&ecomm.cur_server, &bi, sizeof(beacon_info));
+    client_set_gwmac(&ecomm.cur_server.mac[0]);
+    COMM_SYS_send_alive_packet();
+  }
 }
 
 static u32_t comm_udp_thr_stack[0x101];
@@ -175,7 +181,7 @@ void COMM_UDP_init() {
 
   OS_thread_create(&ecomm.thread, OS_THREAD_FLAG_PRIVILEGED,
       COMM_UDP_thread_func, NULL, comm_udp_thr_stack,
-      sizeof(comm_udp_thr_stack) - 4, "eth_comm");
+      sizeof(comm_udp_thr_stack) - 4, "comm_udp");
 
   // comm stack setup
   comm_init(&ecomm.driver,        // comm stack struct

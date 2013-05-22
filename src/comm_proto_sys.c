@@ -32,7 +32,17 @@ static void comm_sys_handle_comm_dead(s32_t err) {
 }
 
 static void comm_sys_alive_timer_task(u32_t ignore, void *ignore_more) {
+  if (comm_sys.connected) {
 #ifdef CONFIG_COMM_ALIVE_TICK
+    COMM_SYS_send_alive_packet();
+#endif
+  } else {
+    COMM_send_alert();
+  }
+  comm_sys_fire_callback(TICK);
+}
+
+s32_t COMM_SYS_send_alive_packet() {
   u8_t buf[2];
   buf[0] = COMM_PROTOCOL_SYS_ID;
   buf[1] = COMM_PROTOCOL_SYS_ALIVE;
@@ -42,8 +52,7 @@ static void comm_sys_alive_timer_task(u32_t ignore, void *ignore_more) {
   } else {
     comm_sys_handle_comm_dead(res);
   }
-#endif
-  comm_sys_fire_callback(TICK);
+  return res;
 }
 
 void COMM_SYS_register_event_cb(comm_sys_cb *s, comm_sys_cb_fn f) {
