@@ -26,6 +26,7 @@
 #include "enc28j60_spi_eth.h"
 #endif
 #include "bl_exec.h"
+#include "spi_flash_os.h"
 
 static u8_t in[256];
 
@@ -101,17 +102,15 @@ static int f_spifcl(int);
 static int f_spifbusy();
 static int f_spifmaer();
 static int f_spifdump();
+
+static int f_spifosrd(int, int);
+
 #ifdef CONFIG_ETHSPI
 static int f_spiginit();
 static int f_spigrx(int num);
 static int f_spigtx(char *str);
 static int f_spigtxrx(char *str, int num);
 static int f_spigclose();
-
-static int f_col(int col) {
-  print("\033[1;3%im", col & 7);
-  return 0;
-}
 
 static int f_eth_up();
 
@@ -123,6 +122,11 @@ static int f_ethregw(int reg, int data);
 
 static int f_read_nvram();
 static int f_wr_nvram(int a, int d);
+
+static int f_col(int col) {
+  print("\033[1;3%im", col & 7);
+  return 0;
+}
 
 #ifdef CONFIG_ADC
 static int f_adc();
@@ -138,6 +142,176 @@ static int f_hardfault(int a) {
 #pragma GCC diagnostic pop
 }
 
+#include "spiffs.h"
+os_thread spiffs_thr;
+spiffs fs;
+static u8_t spiffs_work[256*2];
+static u8_t spiffs_fds[256];
+static u8_t spiffs_op;
+static char spiffs_path[32];
+static u8_t spiffs_data[256];
+static u32_t spiffs_data_len;
+#define SPIFFS_OS_STACK 0x400
+static void *spiffs_thr_f(void *stack) {
+  switch (spiffs_op) {
+  case 0: {
+    print("spiffs mount\n");
+    spiffs_config cfg;
+    cfg.phys_addr = 0;
+    cfg.phys_erase_block = 65536;
+    cfg.phys_size = 1024*1024;
+    cfg.log_block_size = 65536;
+    cfg.log_page_size = 256;
+    cfg.hal_read_f = SFOS_read;
+    cfg.hal_write_f = SFOS_write;
+    cfg.hal_erase_f = SFOS_erase;
+
+    SPIFFS_init(
+        &fs,
+        &cfg,
+        spiffs_work,
+        spiffs_fds,
+        sizeof(spiffs_fds));
+    break;
+  }
+  case 1: {
+    print("spiffs ls\n");
+    spiffs_test_list_objects(&fs);
+    break;
+  }
+  case 2: {
+    print("spiffs creat %s\n", spiffs_path);
+    s32_t res = SPIFFS_creat(&fs, spiffs_path, 0);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(&fs));
+    break;
+  }
+  case 3: {
+    print("spiffs rm %s\n", spiffs_path);
+    s32_t res = SPIFFS_remove(&fs, spiffs_path);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(&fs));
+    break;
+  }
+  case 4: {
+    print("spiffs read %s\n", spiffs_path);
+    spiffs_file fd = SPIFFS_open(&fs, spiffs_path, 0, 0);
+    if (fd < 0) {
+      print("err fd %i\n", SPIFFS_errno(&fs));
+      break;
+    }
+    spiffs_stat stat;
+    s32_t res = SPIFFS_fstat(&fs, fd, &stat);
+    if (res < 0) {
+      print("err stat %i\n", SPIFFS_errno(&fs));
+      break;
+    }
+    u32_t offs = 0;
+    while (res >= 0 && offs < stat.size) {
+      u8_t buf[64];
+      u32_t to_read = MIN(sizeof(buf), stat.size - offs);
+      res = SPIFFS_read(&fs, fd, buf, to_read);
+      if (res >= 0) {
+        int i;
+#if 0
+        print("%08x: ", offs);
+        for (i = 0; i < res; i++) {
+          print("%02x", buf[i]);
+        }
+        print("\n");
+#endif
+        for (i = 0; i < res; i++) {
+          print("%c", buf[i]);
+        }
+      }
+      offs += to_read;
+    }
+    print("\n");
+    if (res < 0) {
+      print("err read %i\n", SPIFFS_errno(&fs));
+      break;
+    }
+    if (fd > 0) {
+      SPIFFS_close(&fs, fd);
+    }
+    break;
+  }
+  case 5: {
+    print("spiffs write %s\n", spiffs_path);
+    spiffs_file fd = SPIFFS_open(&fs, spiffs_path, 0, SPIFFS_APPEND);
+    if (fd < 0) {
+      print("err %i\n", SPIFFS_errno(&fs));
+      break;
+    }
+    s32_t res = SPIFFS_write(&fs, fd, spiffs_data, spiffs_data_len);
+    if (res < 0) {
+      print("err %i\n", SPIFFS_errno(&fs));
+      break;
+    }
+    if (fd > 0) {
+      SPIFFS_close(&fs, fd);
+    }
+    break;
+  }
+  }
+
+  print("spiffs end\n");
+  HEAP_free(stack);
+  return NULL;
+}
+
+static void spiffs_run(u8_t op) {
+  spiffs_op = op;
+  void *spiffs_thr_stack = HEAP_malloc(SPIFFS_OS_STACK);
+  if (spiffs_thr_stack) {
+    OS_thread_create(
+        &spiffs_thr,
+        OS_THREAD_FLAG_PRIVILEGED,
+        spiffs_thr_f,
+        spiffs_thr_stack,
+        spiffs_thr_stack,
+        SPIFFS_OS_STACK-4,
+        "spifosrd");
+  } else {
+    print("no heap!\n");
+  }
+}
+
+static int f_spiffs_mount() {
+  spiffs_run(0);
+  return 0;
+}
+
+static int f_spiffs_ls() {
+  spiffs_run(1);
+  return 0;
+}
+
+static int f_spiffs_creat(char *path) {
+  strncpy(spiffs_path, path, SPIFFS_OBJ_NAME_LEN);
+  spiffs_run(2);
+  return 0;
+}
+
+static int f_spiffs_rm(char *path) {
+  strncpy(spiffs_path, path, SPIFFS_OBJ_NAME_LEN);
+  spiffs_run(3);
+  return 0;
+}
+
+static int f_spiffs_read(char *path) {
+  strncpy(spiffs_path, path, SPIFFS_OBJ_NAME_LEN);
+  spiffs_run(4);
+  return 0;
+}
+
+static int f_spiffs_write(char *path, char *data) {
+  strncpy(spiffs_path, path, SPIFFS_OBJ_NAME_LEN);
+  strcpy((char *)spiffs_data, data);
+  spiffs_data_len = strlen(data);
+  spiffs_run(5);
+  return 0;
+}
+
+#if 0
 #define USE_FSMC
 
 #ifndef USE_FSMC
@@ -677,6 +851,7 @@ static int f_test() {
 
   return 0;
 }
+#endif
 
 static int _argc;
 static void *_args[16];
@@ -891,6 +1066,10 @@ static cmd c_tbl[] = {
     {.name = "spifdump",     .fn = (func)f_spifdump,
         .help = "Dump spi flash dev stats\n"
     },
+    {.name = "spifosrd",   .fn = (func)f_spifosrd,
+        .help = "Read spi flash dev via os thread\n"\
+        "spifosrd <addr> <len>\n"
+    },
 #ifdef CONFIG_ETHSPI
     {.name = "spiginit",     .fn = (func)f_spiginit,
         .help = "Init & open generic spi device\n"
@@ -943,11 +1122,29 @@ static cmd c_tbl[] = {
         .help = "Sample adc\n"
     },
 #endif
-
+#if 0
     {.name = "test",     .fn = (func)f_test,
         .help = "Test func\n"
     },
-
+#endif
+    {.name = "spiffs_mount",     .fn = (func)f_spiffs_mount,
+        .help = "Mount spiffs\n"
+    },
+    {.name = "spiffs_ls",     .fn = (func)f_spiffs_ls,
+        .help = "List all files\n"
+    },
+    {.name = "spiffs_creat",     .fn = (func)f_spiffs_creat,
+        .help = "Create empty file\n"
+    },
+    {.name = "spiffs_rm",     .fn = (func)f_spiffs_rm,
+        .help = "Remove file\n"
+    },
+    {.name = "spiffs_read",     .fn = (func)f_spiffs_read,
+        .help = "Read file\n"
+    },
+    {.name = "spiffs_write",     .fn = (func)f_spiffs_write,
+        .help = "Write to file\n"
+    },
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\
         "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"\
@@ -1640,6 +1837,51 @@ static int f_spifbusy() {
 
 static int f_spifdump() {
   SPI_FLASH_dump(SPI_FLASH);
+  return 0;
+}
+
+os_thread spif_rd_thr;
+static int spif_rd_addr;
+static int spif_rd_len;
+static void *spif_rd_thr_stack;
+static void *spif_rd_thr_f(void *stack) {
+  int addr = spif_rd_addr;
+  s32_t res = SPI_OK;
+  while (addr < spif_rd_addr + spif_rd_len) {
+    u8_t c;
+    res = SFOS_read(addr, 1, &c);
+    if (res != SPI_OK) {
+      print("spi failure %i\n", res);
+      break;
+    }
+    print("%02x", c);
+    addr++;
+  }
+  print("\n");
+  HEAP_free(stack);
+  return NULL;
+}
+
+static int f_spifosrd(int addr, int len) {
+  if (_argc != 2) {
+    return -1;
+  }
+#define SPIF_OS_RD_STACK 0x140
+  spif_rd_thr_stack = HEAP_malloc(SPIF_OS_RD_STACK);
+  if (spif_rd_thr_stack) {
+    spif_rd_addr = addr;
+    spif_rd_len = len;
+    OS_thread_create(
+        &spif_rd_thr,
+        OS_THREAD_FLAG_PRIVILEGED,
+        spif_rd_thr_f,
+        spif_rd_thr_stack,
+        spif_rd_thr_stack,
+        SPIF_OS_RD_STACK-4,
+        "spifosrd");
+  } else {
+    print("no heap!\n");
+  }
   return 0;
 }
 

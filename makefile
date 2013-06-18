@@ -101,6 +101,7 @@ FILES = 	processor.c \
 			spi_dev.c \
 			spi_flash.c \
 			spi_flash_m25p16.c \
+			spi_flash_os.c \
 			spi_dev_os_generic.c \
 			timer.c \
 			adc.c \
@@ -118,7 +119,9 @@ FILES = 	processor.c \
 			os.c \
 			enc28j60_spi_eth.c \
 			crc.c \
-			comm_proto_file.c
+			comm_proto_file.c \
+			spiffs_nucleus.c \
+			spiffs_hydrogen.c
 			
 # comm files
 include ${comm_dir}/files.mk

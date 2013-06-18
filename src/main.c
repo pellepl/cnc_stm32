@@ -19,6 +19,7 @@
 #include "linker_symaccess.h"
 #include "bl_exec.h"
 #include "spi_flash_m25p16.h"
+#include "spi_flash_os.h"
 #include "comm_proto_file.h"
 #include "enc28j60_spi_eth.h"
 
@@ -26,7 +27,7 @@ os_thread kernel_thread;
 
 #ifdef DBG_OS_THREAD_BLINKY
 os_thread dbg_blinky_thread;
-u32_t dbg_blinky_stack[500];
+u32_t dbg_blinky_stack[0x1f];
 static void *dbg_blinky_thread_func(void *a) {
   while (TRUE) {
     GPIO_disable(GPIOC, GPIO_Pin_7);
@@ -75,7 +76,9 @@ static void *kernel_func(void *a) {
   ETH_SPI_init();
   ETH_SPI_start();
 
-#ifdef DBG_KERNEL_TASK_BLINKY
+  SFOS_init();
+
+  #ifdef DBG_KERNEL_TASK_BLINKY
   dbg_blinky_task = TASK_create(dbg_blinky_task_func, TASK_STATIC);
   TASK_start_timer(dbg_blinky_task, &dbg_blinky_task_timer, 0,0,0,950,"dbg_blink");
 #endif
@@ -91,7 +94,6 @@ static void *kernel_func(void *a) {
       sizeof(dbg_blinky_stack)-4,
       "dbg_blink");
 #endif
-
 
   while (1) {
     while (TASK_tick());

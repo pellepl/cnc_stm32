@@ -477,9 +477,19 @@ u32_t OS_thread_create(os_thread *t, u32_t flags, void *(*func)(void *), void *a
   __os_enter_critical_kernel();
   list_add(&os.q_running, OS_ELEMENT(t));
 #if OS_DBG_MON & OS_THREAD_PEERS > 0
-  os.thread_peers[os.thread_peer_ix++] = t;
-  if (os.thread_peer_ix >= OS_THREAD_PEERS) {
-    os.thread_peer_ix = 0;
+  {
+    int i;
+    for (i = 0; i < OS_THREAD_PEERS; i++) {
+      if (os.thread_peers[i] == t) {
+        break;
+      }
+    }
+    if (i == OS_THREAD_PEERS) {
+      os.thread_peers[os.thread_peer_ix++] = t;
+      if (os.thread_peer_ix >= OS_THREAD_PEERS) {
+        os.thread_peer_ix = 0;
+      }
+    }
   }
 #endif
   TRACE_OS_THRCREATE(t);

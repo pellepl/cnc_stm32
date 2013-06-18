@@ -39,6 +39,7 @@ do { \
   "nvs", \
   "spi", \
   "eth", \
+  "fs", \
 }
 
 #ifdef DBG_SYS_OFF
@@ -91,6 +92,11 @@ do { \
 #else
 #define D_ETH     (1<<9)
 #endif
+#ifdef DBG_FS_OFF
+#define D_FS     0
+#else
+#define D_FS      (1<<10)
+#endif
 #ifdef DBG_ANY_OFF
 #define D_ANY     0
 #else
@@ -109,6 +115,7 @@ do { \
 #define D_NVS     0
 #define D_SPI     0
 #define D_ETH     0
+#define D_FS      0
 #define D_ANY     0
 
 #endif  // DBG_OFF
