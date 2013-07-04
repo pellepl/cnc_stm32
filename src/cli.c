@@ -243,6 +243,12 @@ static void *spiffs_thr_f(void *stack) {
     }
     break;
   }
+  case 6: {
+    print("spiffs check\n");
+    s32_t res = SPIFFS_check(SPIFFS_get_filesystem());
+    print("res %i\n", res);
+    break;
+  }
   }
 
   print("spiffs end\n");
@@ -302,6 +308,13 @@ static int f_spiffs_write(char *path, char *data) {
   spiffs_run(5);
   return 0;
 }
+
+static int f_spiffs_check() {
+  spiffs_run(6);
+  return 0;
+}
+
+
 
 #if 0
 #define USE_FSMC
@@ -1136,6 +1149,9 @@ static cmd c_tbl[] = {
     },
     {.name = "spiffs_write",     .fn = (func)f_spiffs_write,
         .help = "Write to file\n"
+    },
+    {.name = "spiffs_check",     .fn = (func)f_spiffs_check,
+        .help = "Check spiffs consistency\n"
     },
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\
