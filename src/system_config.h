@@ -339,6 +339,10 @@
 #define LED_SPI_FLASH_BIT     1
 #define LED_SPI_FLASH         (1<<LED_SPI_FLASH_BIT)
 
+/** FS **/
+
+#define CONFIG_SPIFFS
+
 /** DEBUG **/
 
 // disable all asserts

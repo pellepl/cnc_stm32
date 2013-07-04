@@ -27,6 +27,7 @@
 #endif
 #include "bl_exec.h"
 #include "spi_flash_os.h"
+#include "spiffs_wrapper.h"
 
 static u8_t in[256];
 
@@ -144,9 +145,7 @@ static int f_hardfault(int a) {
 
 #include "spiffs.h"
 os_thread spiffs_thr;
-spiffs fs;
-static u8_t spiffs_work[256*2];
-static u8_t spiffs_fds[256];
+
 static u8_t spiffs_op;
 static char spiffs_path[32];
 static u8_t spiffs_data[256];
@@ -156,59 +155,52 @@ static void *spiffs_thr_f(void *stack) {
   switch (spiffs_op) {
   case 0: {
     print("spiffs mount\n");
-    spiffs_config cfg;
-    cfg.phys_addr = 0;
-    cfg.phys_erase_block = 65536;
-    cfg.phys_size = 1024*1024;
-    cfg.log_block_size = 65536;
-    cfg.log_page_size = 256;
-    cfg.hal_read_f = SFOS_read;
-    cfg.hal_write_f = SFOS_write;
-    cfg.hal_erase_f = SFOS_erase;
-
-    SPIFFS_init(
-        &fs,
-        &cfg,
-        spiffs_work,
-        spiffs_fds,
-        sizeof(spiffs_fds));
+    SPIFFS_mount();
     break;
   }
   case 1: {
     print("spiffs ls\n");
-    spiffs_test_list_objects(&fs);
+    spiffs_DIR d;
+    struct spiffs_dirent e;
+    struct spiffs_dirent *pe = &e;
+    SPIFFS_opendir(SPIFFS_get_filesystem(), "", &d);
+    while ((pe = SPIFFS_readdir(&d, pe)) != 0) {
+      print("%s\t%i bytes\ttype %02x\n", pe->name, pe->size, pe->type);
+    }
+    SPIFFS_closedir(&d);
     break;
   }
   case 2: {
     print("spiffs creat %s\n", spiffs_path);
-    s32_t res = SPIFFS_creat(&fs, spiffs_path, 0);
-    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(&fs));
+    s32_t res = SPIFFS_creat(SPIFFS_get_filesystem(), spiffs_path, 0);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
     break;
   }
   case 3: {
     print("spiffs rm %s\n", spiffs_path);
-    s32_t res = SPIFFS_remove(&fs, spiffs_path);
-    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(&fs));
+    s32_t res = SPIFFS_remove(SPIFFS_get_filesystem(), spiffs_path);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
     break;
   }
   case 4: {
     print("spiffs read %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(&fs, spiffs_path, 0, 0);
+    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), spiffs_path, 0, 0);
     if (fd < 0) {
-      print("err fd %i\n", SPIFFS_errno(&fs));
+      print("err fd %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
       break;
     }
     spiffs_stat stat;
-    s32_t res = SPIFFS_fstat(&fs, fd, &stat);
+    s32_t res = SPIFFS_fstat(SPIFFS_get_filesystem(), fd, &stat);
     if (res < 0) {
-      print("err stat %i\n", SPIFFS_errno(&fs));
+      SPIFFS_close(SPIFFS_get_filesystem(), fd);
+      print("err stat %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
       break;
     }
     u32_t offs = 0;
     while (res >= 0 && offs < stat.size) {
       u8_t buf[64];
       u32_t to_read = MIN(sizeof(buf), stat.size - offs);
-      res = SPIFFS_read(&fs, fd, buf, to_read);
+      res = SPIFFS_read(SPIFFS_get_filesystem(), fd, buf, to_read);
       if (res >= 0) {
         int i;
 #if 0
@@ -226,28 +218,28 @@ static void *spiffs_thr_f(void *stack) {
     }
     print("\n");
     if (res < 0) {
-      print("err read %i\n", SPIFFS_errno(&fs));
+      print("err read %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
       break;
     }
     if (fd > 0) {
-      SPIFFS_close(&fs, fd);
+      SPIFFS_close(SPIFFS_get_filesystem(), fd);
     }
     break;
   }
   case 5: {
     print("spiffs write %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(&fs, spiffs_path, 0, SPIFFS_APPEND);
+    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), spiffs_path, 0, SPIFFS_APPEND);
     if (fd < 0) {
-      print("err %i\n", SPIFFS_errno(&fs));
+      print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
       break;
     }
-    s32_t res = SPIFFS_write(&fs, fd, spiffs_data, spiffs_data_len);
+    s32_t res = SPIFFS_write(SPIFFS_get_filesystem(), fd, spiffs_data, spiffs_data_len);
     if (res < 0) {
-      print("err %i\n", SPIFFS_errno(&fs));
+      print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
       break;
     }
     if (fd > 0) {
-      SPIFFS_close(&fs, fd);
+      SPIFFS_close(SPIFFS_get_filesystem(), fd);
     }
     break;
   }

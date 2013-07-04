@@ -22,11 +22,11 @@ FLAGS += -DUSER_HARDFAULT=1
 sourcedir = src
 builddir = build
 
-#basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.0
-basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
+basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
+#basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
 #basetoolsdir = /usr/local/gcc/arm-elf-tools-4.6.3
 #/home/petera/toolchain/gcc/arm-elf-tools-4.6.2
-codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.7.1/
+#codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.8.1/
 stmlibdir = STM32F10x_StdPeriph_Lib_V3.5.0/Libraries
 stmdriverdir = ${stmlibdir}/STM32F10x_StdPeriph_Driver
 stmcmsisdir = ${stmlibdir}/CMSIS/CM3/DeviceSupport/ST/STM32F10x
@@ -36,6 +36,7 @@ tools = ${basetoolsdir}/bin
 comm_dir = ../generic/comm
 tinyheap_dir = ../generic/tinyheap
 enc28j60_dir = ../generic/enc28j60_stm32
+spiffs_dir = ../generic/spiffs
 
 #############
 #
@@ -60,7 +61,7 @@ MKDIR = mkdir -p
 #
 ###############
 
-INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} -I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src
+INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} -I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src -I./${spiffs_dir}/src
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2
 #-ffunction-sections -fdata-sections
 COMPILEROPTIONS += -O3 
@@ -120,8 +121,7 @@ FILES = 	processor.c \
 			enc28j60_spi_eth.c \
 			crc.c \
 			comm_proto_file.c \
-			spiffs_nucleus.c \
-			spiffs_hydrogen.c
+			spiffs_wrapper.c
 			
 # comm files
 include ${comm_dir}/files.mk
@@ -131,6 +131,9 @@ include ${tinyheap_dir}/files.mk
 		
 # enc28j60 driver files
 include ${enc28j60_dir}/files.mk
+		
+# spiffs files
+include ${spiffs_dir}/files.mk
 		
 # stm32 lib files
 FILES += 	misc.c \
@@ -179,7 +182,7 @@ BINARYEXT = .hex
 #
 ############
 
-vpath %.c ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore} ${comm_dir}/src ${tinyheap_dir}/src ${enc28j60_dir}/src
+vpath %.c ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore} ${comm_dir}/src ${tinyheap_dir}/src ${enc28j60_dir}/src ${spiffs_dir}/src
 vpath %.s ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdir}/startup/gcc_ride7
 
 SOBJFILES = $(SFILES:%.s=${builddir}/%.o)

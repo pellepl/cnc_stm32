@@ -18,6 +18,9 @@
 /* the size of a block in bytes */
 #define TH_BLOCKSIZE                    32
 
+/* alignment of returned data pointers */
+#define TH_ALIGNMENT (4 - (sizeof(th_block_h)&3))
+
 /* keep track of free number of bytes in heap */
 #define TH_CALC_FREE                    1
 /* safety check heap boundary during free block scan */

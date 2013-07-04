@@ -22,8 +22,47 @@
 #include "spi_flash_os.h"
 #include "comm_proto_file.h"
 #include "enc28j60_spi_eth.h"
+#include "spiffs_wrapper.h"
 
 os_thread kernel_thread;
+
+#define SPIFFS_TEST_THR
+
+#ifdef SPIFFS_TEST_THR
+os_thread spiffs_test_thr;
+u32_t spiffs_test_stack[0x200];
+static void *spiffs_test_thr_func(void *a) {
+  while (TRUE) {
+    OS_thread_sleep(5*1000);
+    int c = 0;
+    char b[64];
+    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), "count", 0, 0);
+    if (fd > 0) {
+      SPIFFS_read(
+          SPIFFS_get_filesystem(),
+          fd,
+          b,
+          64);
+      c = atoin(b, 10, strlen(b));
+      SPIFFS_fremove(SPIFFS_get_filesystem(), fd);
+      SPIFFS_close(SPIFFS_get_filesystem(), fd);
+      print("spiffs: read %i\n", c);
+    }
+    sprint(b, "%i%c", c+1,0);
+    fd = SPIFFS_open( SPIFFS_get_filesystem(), "count", 0,
+        SPIFFS_RDWR | SPIFFS_CREAT);
+    if (fd > 0) {
+      SPIFFS_write(SPIFFS_get_filesystem(),
+          fd,
+          b,
+          strlen(b)+1);
+    }
+    SPIFFS_close(SPIFFS_get_filesystem(), fd);
+    print("spiffs: wrote %i\n", c+1);
+  }
+  return NULL;
+}
+#endif
 
 #ifdef DBG_OS_THREAD_BLINKY
 os_thread dbg_blinky_thread;
@@ -78,7 +117,11 @@ static void *kernel_func(void *a) {
 
   SFOS_init();
 
-  #ifdef DBG_KERNEL_TASK_BLINKY
+#ifdef CONFIG_SPIFFS
+  SPIFFS_sys_init();
+#endif
+
+#ifdef DBG_KERNEL_TASK_BLINKY
   dbg_blinky_task = TASK_create(dbg_blinky_task_func, TASK_STATIC);
   TASK_start_timer(dbg_blinky_task, &dbg_blinky_task_timer, 0,0,0,950,"dbg_blink");
 #endif
@@ -93,6 +136,17 @@ static void *kernel_func(void *a) {
       dbg_blinky_stack,
       sizeof(dbg_blinky_stack)-4,
       "dbg_blink");
+#endif
+
+#ifdef SPIFFS_TEST_THR
+  OS_thread_create(
+      &spiffs_test_thr,
+      OS_THREAD_FLAG_PRIVILEGED,
+      spiffs_test_thr_func,
+      0,
+      spiffs_test_stack,
+      sizeof(spiffs_test_stack)-4,
+      "test_spiffs");
 #endif
 
   while (1) {

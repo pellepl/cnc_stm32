@@ -30,11 +30,18 @@ static struct {
 static void LED_enable_intern(led_t led) {
   led_shift.current_led |= led;
   led_shift.dirty = TRUE;
+  // TODO PETER REMOV
+  if (led & LED_SPI_FLASH) {
+    GPIO_enable(GPIOD, GPIO_Pin_13);
+  }
 }
 
 static void LED_disable_intern(led_t led) {
   led_shift.current_led &= ~led;
   led_shift.dirty = TRUE;
+  if (led & LED_SPI_FLASH) {
+    GPIO_disable(GPIOD, GPIO_Pin_13);
+  }
 }
 
 static void LED_set_intern(led_t led_enable, led_t led_disable) {

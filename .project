@@ -90,6 +90,11 @@
 			<location>/home/petera/proj/generic/enc28j60_stm32/src</location>
 		</link>
 		<link>
+			<name>spiffs</name>
+			<type>2</type>
+			<location>/home/petera/proj/generic/spiffs</location>
+		</link>
+		<link>
 			<name>tinyheap_src</name>
 			<type>2</type>
 			<location>/home/petera/proj/generic/tinyheap/src</location>

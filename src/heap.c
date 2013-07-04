@@ -13,7 +13,7 @@ static u8_t _heap_data[TH_BLOCKSIZE * (127)];
 static tinyheap _heap;
 
 void *HEAP_malloc(unsigned int size) {
-  void *p = th_malloc(&_heap, size);;
+  void *p = th_malloc(&_heap, size);
   if (p == NULL) {
     DBG(D_HEAP, D_FATAL, "HEAP alloc %i return 0\n", size);
   }
