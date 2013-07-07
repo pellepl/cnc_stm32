@@ -171,7 +171,7 @@ void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data) {
   }
 }
 
-static u32_t comm_udp_thr_stack[0x101];
+static u32_t comm_udp_thr_stack[0x181];
 
 void COMM_UDP_init() {
   DBG(D_COMM, D_DEBUG, "COMM UDP init\n");

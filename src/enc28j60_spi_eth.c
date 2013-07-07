@@ -112,10 +112,21 @@ static void _eth_spi_configure() {
       ip_address[0], ip_address[1], ip_address[2], ip_address[3], mac_address[0], mac_address[1], mac_address[2], mac_address[3], mac_address[4], mac_address[5]);
 }
 
-static void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
+
+/* TODO compiler bug
+ * GCC v4.8.1 -O3 - having static here will make the memcpy function overwrite stack when
+ * doing a port scan of the device with the andriod utility Net Scan.
+ * Reenable static and adding print("%08x\n", len); will also remove the stack overwrite
+ * GCC bug - reenable static when GCC is updated next time
+ */
+/*static*/ void _eth_spi_store_and_signal_rx(u8_t *data, u16_t len) {
   OS_mutex_lock(&ethspi.rx_mutex);
   if (ethspi.rx_queue.len < ETHSPI_RX_QUEUE_SIZE) {
     ethernet_frame *f = &ethspi.rx_queue.frames[ethspi.rx_queue.wix];
+    if (len > ETHSPI_MAX_PKT_SIZE) {
+      len = ETHSPI_MAX_PKT_SIZE;
+    }
+    //print("%08x\n", len); // if removed in static function things crash, stack corruption
     memcpy(f->data, data, len);
     f->len = len;
     ethspi.rx_queue.wix = (ethspi.rx_queue.wix+1) % ETHSPI_RX_QUEUE_SIZE;
@@ -143,7 +154,6 @@ static void _eth_spi_handle_frame() {
 
   DBG(D_ETH, D_DEBUG, "ethspi got frame, len %i, rx_stat:%04x\n", plen, rx_stat);
   //printbuf(ethspi.rxbuf, MIN(64, plen));
-
   // doing dhcp, do not allow anything else right now
   if (ethspi.dhcp.query && ethspi.dhcp.active) {
     int dhcp_res;
@@ -369,13 +379,13 @@ void ETH_SPI_start() {
   }
 
   ethspi.active = TRUE;
-  ethspi.rx_stack = HEAP_malloc(0x404);
+  ethspi.rx_stack = HEAP_malloc(0x304);
   OS_thread_create(
       &ethspi.irq_thread,
       OS_THREAD_FLAG_PRIVILEGED,
       _eth_spi_irq_thread_handler,
       NULL,
-      (void *)ethspi.rx_stack, 0x400,
+      (void *)ethspi.rx_stack, 0x300,
       "ethspi");
 }
 

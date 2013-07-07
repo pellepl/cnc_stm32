@@ -155,7 +155,7 @@ static void *spiffs_thr_f(void *stack) {
   switch (spiffs_op) {
   case 0: {
     print("spiffs mount\n");
-    SPIFFS_mount();
+    FS_mount();
     break;
   }
   case 1: {
@@ -163,7 +163,7 @@ static void *spiffs_thr_f(void *stack) {
     spiffs_DIR d;
     struct spiffs_dirent e;
     struct spiffs_dirent *pe = &e;
-    SPIFFS_opendir(SPIFFS_get_filesystem(), "", &d);
+    SPIFFS_opendir(FS_get_filesystem(), "", &d);
     while ((pe = SPIFFS_readdir(&d, pe)) != 0) {
       print("%s\t%i bytes\ttype %02x\n", pe->name, pe->size, pe->type);
     }
@@ -172,35 +172,35 @@ static void *spiffs_thr_f(void *stack) {
   }
   case 2: {
     print("spiffs creat %s\n", spiffs_path);
-    s32_t res = SPIFFS_creat(SPIFFS_get_filesystem(), spiffs_path, 0);
-    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+    s32_t res = SPIFFS_creat(FS_get_filesystem(), spiffs_path, 0);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(FS_get_filesystem()));
     break;
   }
   case 3: {
     print("spiffs rm %s\n", spiffs_path);
-    s32_t res = SPIFFS_remove(SPIFFS_get_filesystem(), spiffs_path);
-    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+    s32_t res = SPIFFS_remove(FS_get_filesystem(), spiffs_path);
+    if (res != SPIFFS_OK) print("err %i\n", SPIFFS_errno(FS_get_filesystem()));
     break;
   }
   case 4: {
     print("spiffs read %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), spiffs_path, 0, 0);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, 0, 0);
     if (fd < 0) {
-      print("err fd %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+      print("err fd %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
     }
     spiffs_stat stat;
-    s32_t res = SPIFFS_fstat(SPIFFS_get_filesystem(), fd, &stat);
+    s32_t res = SPIFFS_fstat(FS_get_filesystem(), fd, &stat);
     if (res < 0) {
-      SPIFFS_close(SPIFFS_get_filesystem(), fd);
-      print("err stat %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+      SPIFFS_close(FS_get_filesystem(), fd);
+      print("err stat %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
     }
     u32_t offs = 0;
     while (res >= 0 && offs < stat.size) {
       u8_t buf[64];
       u32_t to_read = MIN(sizeof(buf), stat.size - offs);
-      res = SPIFFS_read(SPIFFS_get_filesystem(), fd, buf, to_read);
+      res = SPIFFS_read(FS_get_filesystem(), fd, buf, to_read);
       if (res >= 0) {
         int i;
 #if 0
@@ -218,34 +218,34 @@ static void *spiffs_thr_f(void *stack) {
     }
     print("\n");
     if (res < 0) {
-      print("err read %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+      print("err read %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
     }
     if (fd > 0) {
-      SPIFFS_close(SPIFFS_get_filesystem(), fd);
+      SPIFFS_close(FS_get_filesystem(), fd);
     }
     break;
   }
   case 5: {
     print("spiffs write %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), spiffs_path, 0, SPIFFS_APPEND);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, 0, SPIFFS_APPEND);
     if (fd < 0) {
-      print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+      print("err %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
     }
-    s32_t res = SPIFFS_write(SPIFFS_get_filesystem(), fd, spiffs_data, spiffs_data_len);
+    s32_t res = SPIFFS_write(FS_get_filesystem(), fd, spiffs_data, spiffs_data_len);
     if (res < 0) {
-      print("err %i\n", SPIFFS_errno(SPIFFS_get_filesystem()));
+      print("err %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
     }
     if (fd > 0) {
-      SPIFFS_close(SPIFFS_get_filesystem(), fd);
+      SPIFFS_close(FS_get_filesystem(), fd);
     }
     break;
   }
   case 6: {
     print("spiffs check\n");
-    s32_t res = SPIFFS_check(SPIFFS_get_filesystem());
+    s32_t res = SPIFFS_check(FS_get_filesystem());
     print("res %i\n", res);
     break;
   }

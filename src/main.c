@@ -36,28 +36,28 @@ static void *spiffs_test_thr_func(void *a) {
     OS_thread_sleep(5*1000);
     int c = 0;
     char b[64];
-    spiffs_file fd = SPIFFS_open(SPIFFS_get_filesystem(), "count", 0, 0);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), "count", 0, 0);
     if (fd > 0) {
       SPIFFS_read(
-          SPIFFS_get_filesystem(),
+          FS_get_filesystem(),
           fd,
           b,
           64);
       c = atoin(b, 10, strlen(b));
-      SPIFFS_fremove(SPIFFS_get_filesystem(), fd);
-      SPIFFS_close(SPIFFS_get_filesystem(), fd);
+      SPIFFS_fremove(FS_get_filesystem(), fd);
+      SPIFFS_close(FS_get_filesystem(), fd);
       print("spiffs: read %i\n", c);
     }
     sprint(b, "%i%c", c+1,0);
-    fd = SPIFFS_open( SPIFFS_get_filesystem(), "count", 0,
+    fd = SPIFFS_open( FS_get_filesystem(), "count", 0,
         SPIFFS_RDWR | SPIFFS_CREAT);
     if (fd > 0) {
-      SPIFFS_write(SPIFFS_get_filesystem(),
+      SPIFFS_write(FS_get_filesystem(),
           fd,
           b,
           strlen(b)+1);
     }
-    SPIFFS_close(SPIFFS_get_filesystem(), fd);
+    SPIFFS_close(FS_get_filesystem(), fd);
     print("spiffs: wrote %i\n", c+1);
   }
   return NULL;
@@ -118,7 +118,7 @@ static void *kernel_func(void *a) {
   SFOS_init();
 
 #ifdef CONFIG_SPIFFS
-  SPIFFS_sys_init();
+  FS_sys_init();
 #endif
 
 #ifdef DBG_KERNEL_TASK_BLINKY

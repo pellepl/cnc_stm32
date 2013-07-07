@@ -13,7 +13,7 @@ static u8_t spiffs_work[256*2];
 static u8_t spiffs_fds[256];
 static u8_t spiffs_cache[256*5];
 
-#define SPIFFS_MOUNT_STACK  0x200
+#define SPIFFS_MOUNT_STACK  0x300
 
 typedef struct {
   os_thread spiffs_mounter;
@@ -23,14 +23,14 @@ typedef struct {
 static void *spiffs_mounter_f(void *a) {
   spiffs_mounter_init *smi = (spiffs_mounter_init *)a;
   print("mounting spiffs..\n");
-  SPIFFS_mount();
+  FS_mount();
   print("mounted spiffs..\n");
   HEAP_free(smi->spiffs_mount_stack);
   HEAP_free(smi);
   return NULL;
 }
 
-void SPIFFS_sys_init() {
+void FS_sys_init() {
   OS_mutex_init(&fs_mutex, 0); //OS_MUTEX_ATTR_REENTRANT);
 #if 1
   spiffs_mounter_init *smi = HEAP_malloc(sizeof(spiffs_mounter_init)+2);
@@ -46,7 +46,7 @@ void SPIFFS_sys_init() {
 #endif
 }
 
-void SPIFFS_mount() {
+void FS_mount() {
   spiffs_config cfg;
   #ifndef SPIFFS_SINGLETON
   cfg.phys_addr = 0;
@@ -59,7 +59,7 @@ void SPIFFS_mount() {
   cfg.hal_write_f = SFOS_write;
   cfg.hal_erase_f = SFOS_erase;
 
-  SPIFFS_init(
+  SPIFFS_mount(
       &fs,
       &cfg,
       spiffs_work,
@@ -69,7 +69,7 @@ void SPIFFS_mount() {
       sizeof(spiffs_cache));
 }
 
-spiffs *SPIFFS_get_filesystem() {
+spiffs *FS_get_filesystem() {
   return &fs;
 }
 

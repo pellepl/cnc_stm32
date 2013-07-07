@@ -10,9 +10,9 @@
 
 #include "spiffs.h"
 
-void SPIFFS_sys_init();
-void SPIFFS_mount();
-spiffs *SPIFFS_get_filesystem();
+void FS_sys_init();
+void FS_mount();
+spiffs *FS_get_filesystem();
 
 
 #endif /* SPIFFS_WRAPPER_H_ */
