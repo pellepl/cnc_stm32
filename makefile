@@ -104,6 +104,7 @@ FILES = 	processor.c \
 			spi_flash_m25p16.c \
 			spi_flash_os.c \
 			spi_dev_os_generic.c \
+			i2c_driver.c \
 			timer.c \
 			adc.c \
 			cnc_control.c \

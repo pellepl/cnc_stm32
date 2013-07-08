@@ -23,6 +23,7 @@
 #include "comm_proto_file.h"
 #include "enc28j60_spi_eth.h"
 #include "spiffs_wrapper.h"
+#include "i2c_driver.h"
 
 os_thread kernel_thread;
 
@@ -46,7 +47,7 @@ static void *spiffs_test_thr_func(void *a) {
       c = atoin(b, 10, strlen(b));
       SPIFFS_fremove(FS_get_filesystem(), fd);
       SPIFFS_close(FS_get_filesystem(), fd);
-      print("spiffs: read %i\n", c);
+      //print("spiffs: read %i\n", c);
     }
     sprint(b, "%i%c", c+1,0);
     fd = SPIFFS_open( FS_get_filesystem(), "count", 0,
@@ -58,7 +59,7 @@ static void *spiffs_test_thr_func(void *a) {
           strlen(b)+1);
     }
     SPIFFS_close(FS_get_filesystem(), fd);
-    print("spiffs: wrote %i\n", c+1);
+    //print("spiffs: wrote %i\n", c+1);
   }
   return NULL;
 }
@@ -179,6 +180,9 @@ int main(void) {
   PROC_periph_init();
 #ifdef CONFIG_ADC
   ADC_init();
+#endif
+#ifdef CONFIG_I2C
+  I2C_init();
 #endif
   __enable_irq();
   print("\n\n\nHardware initialization done\n");

@@ -4,6 +4,7 @@
 #include "timer.h"
 #include "os.h"
 #include "enc28j60_spi_eth.h"
+#include "i2c_driver.h"
 
 /**
   * @brief  This function handles NMI exception.
@@ -200,6 +201,22 @@ void SysTick_Handler(void)
   __os_systick();
   TRACE_IRQ_EXIT(13);
 }
+
+#ifdef CONFIG_I2C
+void I2C1_ER_IRQHandler(void)
+{
+  TRACE_IRQ_ENTER(14);
+  I2C_IRQ_err();
+  TRACE_IRQ_EXIT(14);
+}
+
+void I2C1_EV_IRQHandler(void)
+{
+  TRACE_IRQ_ENTER(15);
+  I2C_IRQ_ev();
+  TRACE_IRQ_EXIT(15);
+}
+#endif
 
 
 /**

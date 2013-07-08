@@ -28,6 +28,7 @@
 #include "bl_exec.h"
 #include "spi_flash_os.h"
 #include "spiffs_wrapper.h"
+#include "i2c_driver.h"
 
 static u8_t in[256];
 
@@ -1113,6 +1114,13 @@ static cmd c_tbl[] = {
     },
 
 #endif
+#endif
+
+#ifdef CONFIG_I2C
+    {.name = "i2c",     .fn = (func)I2C_test,
+        .help = "i2c test\n"
+    },
+
 #endif
 
     {.name = "rdnv",     .fn = (func)f_read_nvram,

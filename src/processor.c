@@ -41,7 +41,7 @@ static void RCC_config() {
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_BKP, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
 
-  /* PCLK1 = HCLK/4 */
+  /* PCLK1 = HCLK/1 */
   RCC_PCLK1Config(RCC_HCLK_Div1);
 
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
@@ -63,6 +63,11 @@ static void RCC_config() {
 #ifdef CONFIG_ETHSPI
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
 #endif
+#endif
+
+#ifdef CONFIG_I2C
+  RCC_APB1PeriphClockCmd(I2C_CLK, ENABLE);
+  RCC_APB2PeriphClockCmd(I2C_GPIO_CLK, ENABLE);
 #endif
 
 #ifdef CONFIG_ADC
@@ -126,6 +131,13 @@ static void NVIC_config(void)
   NVIC_SetPriority(SPI_ETH_INT_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 4, 0));
   NVIC_EnableIRQ(SPI_ETH_INT_EXTI_IRQn);
 #endif
+#endif
+
+#ifdef CONFIG_I2C
+  NVIC_SetPriority(I2C1_EV_IRQn, NVIC_EncodePriority(prioGrp, 3, 1));
+  NVIC_EnableIRQ(I2C1_EV_IRQn);
+  NVIC_SetPriority(I2C1_ER_IRQn, NVIC_EncodePriority(prioGrp, 3, 1));
+  NVIC_EnableIRQ(I2C1_ER_IRQn);
 #endif
 
 #if OS_DBG_MON
@@ -550,6 +562,20 @@ static void ADC_config() {
 #endif
 }
 
+static void I2C_config() {
+#ifdef CONFIG_I2C
+  GPIO_InitTypeDef GPIO_InitStruct;
+
+
+  GPIO_InitStruct.GPIO_Pin = I2C_SCL_GPIO_PIN | I2C_SDA_GPIO_PIN;
+  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_OD;
+  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(I2C_GPIO_PORT, &GPIO_InitStruct);
+  GPIO_PinRemapConfig(GPIO_Remap_I2C1, ENABLE);
+
+#endif
+}
+
 // bootloader settings
 
 static void SPI_config_bootloader() {
@@ -590,6 +616,7 @@ void PROC_periph_init() {
   TIM_config();
   CNC_config();
   ADC_config();
+  I2C_config();
   OS_DUMP_IRQ_config();
 }
 

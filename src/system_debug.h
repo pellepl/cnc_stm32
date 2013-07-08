@@ -203,7 +203,7 @@ extern volatile u32_t _trace_log_ix;
   "TIM2", "DMA_SPI1_RX", "DMA_SPI1_TX", \
   "DMA_SPI2_RX", "DMA_SPI2_RX", \
   "EXTI_ETH_SPI", "EXTI_DBG", \
-  "PENDSV", "SYSTICK", \
+  "PENDSV", "SYSTICK", "I2C_ER", "I2C_EV" \
 }
 #else
 #define TRACE_LOG(op, var)

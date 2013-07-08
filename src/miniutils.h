@@ -70,6 +70,7 @@ void printbuf(u8_t *buf, u16_t len);
 void u_itoa(unsigned int v, char* dst, int base, int num, int flags);
 void itoa(int v, char* dst, int base);
 void itoan(int v, char* dst, int base, int num);
+int atoin(const char* s, int base, int len);
 int strlen(const char* c);
 int strnlen(const char *c, int size);
 int strcmp(const char* s1, const char* s2);
