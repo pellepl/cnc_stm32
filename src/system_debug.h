@@ -40,6 +40,7 @@ do { \
   "spi", \
   "eth", \
   "fs", \
+  "i2c", \
 }
 
 #ifdef DBG_SYS_OFF
@@ -75,7 +76,7 @@ do { \
 #ifdef DBG_CLI_OFF
 #define D_CLI 0
 #else
-#define D_CLI (1<<6)
+#define D_CLI     (1<<6)
 #endif
 #ifdef DBG_NVS_OFF
 #define D_NVS     0
@@ -97,6 +98,11 @@ do { \
 #else
 #define D_FS      (1<<10)
 #endif
+#ifdef DBG_I2C_OFF
+#define D_I2C    0
+#else
+#define D_I2C     (1<<11)
+#endif
 #ifdef DBG_ANY_OFF
 #define D_ANY     0
 #else
@@ -116,6 +122,7 @@ do { \
 #define D_SPI     0
 #define D_ETH     0
 #define D_FS      0
+#define D_I2C     0
 #define D_ANY     0
 
 #endif  // DBG_OFF

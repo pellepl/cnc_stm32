@@ -10,8 +10,20 @@
 
 #include "system.h"
 
-void I2C_IRQ_err();
-void I2C_IRQ_ev();
+/*
+ * I2C bus
+ */
+typedef struct i2c_bus_s {
+  I2C_TypeDef *hw;
+  u8_t attached_devices;
+  volatile bool busy;
+  void (*i2c_bus_callback)(struct i2c_bus_s *s);
+  void *user_p;
+  volatile u32_t user_arg;
+} i2c_bus;
+
+void I2C_IRQ_err(i2c_bus *bus);
+void I2C_IRQ_ev(i2c_bus *bus);
 void I2C_init();
 void I2C_test();
 

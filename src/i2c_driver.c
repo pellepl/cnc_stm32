@@ -33,69 +33,76 @@ void I2C_test() {
   print("ok\n");
 }
 
-void I2C_IRQ_err() {
-  print("i2c_err ");
+void I2C_IRQ_err(i2c_bus *bus) {
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_SMBALERT))
   {
-    print("SMBus Alert");
+    DBG(D_I2C, D_WARN, "i2c_err: SMBus Alert\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_SMBALERT);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_TIMEOUT))
   {
-    print("Timeout or Tlow error");
+    DBG(D_I2C, D_WARN, "i2c_err: Timeout or Tlow error\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_TIMEOUT);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_ARLO))
   {
-    print("Arbitration lost");
+    DBG(D_I2C, D_WARN, "i2c_err: Arbitration lost\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_ARLO);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_PECERR))
   {
-    print("PEC error");
+    DBG(D_I2C, D_WARN, "i2c_err: PEC error\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_PECERR);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_OVR))
   {
-    print("Overrun/Underrun flag");
+    DBG(D_I2C, D_WARN, "i2c_err: Overrun/Underrun flag\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_OVR);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_AF))
   {
-    print("Acknowledge failure");
+    DBG(D_I2C, D_WARN, "i2c_err: Acknowledge failure\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_AF);
   }
   if (I2C_GetITStatus(I2C_PORT, I2C_IT_BERR))
   {
-    print("Bus error");
+    DBG(D_I2C, D_WARN, "i2c_err: Bus error\n");
     I2C_ClearITPendingBit(I2C_PORT, I2C_IT_BERR);
   }
-  print("\n");
 }
 
-void I2C_IRQ_ev() {
+void I2C_IRQ_ev(i2c_bus *bus) {
   u32_t ev = I2C_GetLastEvent(I2C_PORT);
-  print("i2c_ev: %08x", ev);
+  DBG(D_I2C, D_DEBUG, "i2c_ev: %08x\n", ev);
   switch(ev)
   {
   case I2C_EVENT_MASTER_MODE_SELECT:
-    print(" master mode");
+    DBG(D_I2C, D_DEBUG, "i2c_ev:   master mode\n");
     I2C_Send7bitAddress(I2C_PORT, 0x31, I2C_Direction_Transmitter);
   break;
 
   case I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED:
-    print(" master tx mode");
-    I2C_SendData(I2C1, 0xaa);
+    DBG(D_I2C, D_DEBUG, "i2c_ev:   master tx mode\n");
+    I2C_SendData(I2C1, 0x28);
   break;
 
   case I2C_EVENT_MASTER_BYTE_TRANSMITTING:
-    print(" master byte tx");
+    DBG(D_I2C, D_DEBUG, "i2c_ev:   master byte tx\n");
     I2C_GenerateSTOP(I2C_PORT, ENABLE);
   break;
+
+  case I2C_EVENT_MASTER_BYTE_TRANSMITTED:
+    DBG(D_I2C, D_DEBUG, "i2c_ev:   master byte txed\n");
+    I2C_GenerateSTOP(I2C_PORT, ENABLE);
+  break;
+
+  case I2C_EVENT_MASTER_BYTE_RECEIVED:
+    DBG(D_I2C, D_DEBUG, "i2c_ev:   master byte txed\n");
+    (void)I2C_ReceiveData(I2C_PORT);
+    break;
 
   default:
   break;
 
   }
-  print("\n");
 }
