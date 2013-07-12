@@ -107,8 +107,8 @@ static void *kernel_func(void *a) {
   COMM_UART_init(_UART(COMMIN));
   COMM_UDP_init();
   COMM_init();
-  COMM_set_stack(COMM_UART_get_comm(), 0);
-  // TODO PETER COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
+  // TODO PETER COMM_set_stack(COMM_UART_get_comm(), 0);
+  COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
   COMM_SYS_init();
   COMM_FILE_init();
 #ifdef CONFIG_CNC

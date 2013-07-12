@@ -206,14 +206,14 @@ void SysTick_Handler(void)
 void I2C1_ER_IRQHandler(void)
 {
   TRACE_IRQ_ENTER(14);
-  I2C_IRQ_err(0);
+  I2C_IRQ_err(&__i2c_bus_vec[0]);
   TRACE_IRQ_EXIT(14);
 }
 
 void I2C1_EV_IRQHandler(void)
 {
   TRACE_IRQ_ENTER(15);
-  I2C_IRQ_ev(0);
+  I2C_IRQ_ev(&__i2c_bus_vec[0]);
   TRACE_IRQ_EXIT(15);
 }
 #endif

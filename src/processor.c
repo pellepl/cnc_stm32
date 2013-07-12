@@ -66,8 +66,8 @@ static void RCC_config() {
 #endif
 
 #ifdef CONFIG_I2C
-  RCC_APB1PeriphClockCmd(I2C_CLK, ENABLE);
-  RCC_APB2PeriphClockCmd(I2C_GPIO_CLK, ENABLE);
+  RCC_APB1PeriphClockCmd(I2C1_CLK, ENABLE);
+  RCC_APB2PeriphClockCmd(I2C1_GPIO_CLK, ENABLE);
 #endif
 
 #ifdef CONFIG_ADC
@@ -567,10 +567,10 @@ static void I2C_config() {
   GPIO_InitTypeDef GPIO_InitStruct;
 
 
-  GPIO_InitStruct.GPIO_Pin = I2C_SCL_GPIO_PIN | I2C_SDA_GPIO_PIN;
+  GPIO_InitStruct.GPIO_Pin = I2C1_SCL_GPIO_PIN | I2C1_SDA_GPIO_PIN;
   GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_OD;
   GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(I2C_GPIO_PORT, &GPIO_InitStruct);
+  GPIO_Init(I2C1_GPIO_PORT, &GPIO_InitStruct);
   GPIO_PinRemapConfig(GPIO_Remap_I2C1, ENABLE);
 
 #endif

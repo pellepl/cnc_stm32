@@ -22,6 +22,10 @@ typedef struct i2c_bus_s {
   volatile u32_t user_arg;
 } i2c_bus;
 
+extern i2c_bus __i2c_bus_vec[I2C_MAX_ID];
+
+#define _I2C_BUS(x) (&__i2c_bus_vec[(x)])
+
 void I2C_IRQ_err(i2c_bus *bus);
 void I2C_IRQ_ev(i2c_bus *bus);
 void I2C_init();
