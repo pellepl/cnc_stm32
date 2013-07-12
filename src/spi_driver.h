@@ -29,9 +29,9 @@ typedef struct spi_bus_s {
   u8_t nvic_irq;
   u8_t attached_devices;
   volatile bool busy;
-  bool keep_alive;
   u8_t buf[SPI_BUFFER];
   u16_t max_buf_len;
+  u8_t dummy;
   u8_t *rx_buf;
   u16_t rx_len;
   void (*spi_bus_callback)(struct spi_bus_s *s);
@@ -46,28 +46,22 @@ extern spi_bus __spi_bus_vec[SPI_MAX_ID];
 #define _SPI_BUS(x) (&__spi_bus_vec[(x)])
 
 /* Receives data from spi bus. The length here is up to the user.
- * @param keep_alive wether bus should be closed after completed
- *        operation or not
  * @return SPI_OK or error
  */
-int SPI_rx(spi_bus *s, u8_t *rx, u16_t rx_len, bool keep_alive);
+int SPI_rx(spi_bus *s, u8_t *rx, u16_t rx_len);
 
 /* Sends data on spi bus
  * @param tx_len length to tx, must not exceed internal buffer length of driver
- * @param keep_alive wether bus should be closed after completed
- *        operation or not
  * @return SPI_OK or error
  */
-int SPI_tx(spi_bus *s, u8_t *tx, u16_t tx_len, bool keep_alive);
+int SPI_tx(spi_bus *s, u8_t *tx, u16_t tx_len);
 
 /* Sends and receives data on spi bus, full duplex
  * @param tx_len length to tx, must not exceed internal buffer length of driver
  * @param rx_len length to rx, must not exceed internal buffer length of driver
- * @param keep_alive wether bus should be closed after completed
- *        operation or not
  * @return SPI_OK or error
  */
-int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len, bool keep_alive);
+int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len);
 
 /* Closes indefinitely.
  * @return SPI_ERR_BUSY if bus was busy, but still it is closed.

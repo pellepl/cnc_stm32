@@ -357,7 +357,7 @@ static void SPI_config() {
   /* Enable DMA SPI RX channel transfer complete interrupt */
   DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
   /* Enable DMA SPI TX channel transfer complete interrupt */
-  // Do not do this, always use tx/rx transfers, shred tx buffer
+  // Do not do this, always use tx/rx transfers
   // and only await DMA RX finished irq
   //DMA_ITConfig(SPI_MASTER_Tx_DMA_Channel, DMA_IT_TC, ENABLE);
 
@@ -459,12 +459,12 @@ static void OS_DUMP_IRQ_config() {
   GPIO_InitStructure.GPIO_Pin = OS_DUMP_IRQ_GPIO_PIN;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-  GPIO_Init(SPI_ETH_GPIO_PORT, &GPIO_InitStructure);
+  GPIO_Init(OS_DUMP_IRQ_GPIO_PORT, &GPIO_InitStructure);
 
   GPIO_InitStructure.GPIO_Pin = OS_DUMP_IRQ_GPIO_PIN;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-  GPIO_Init(SPI_ETH_INT_GPIO_PORT, &GPIO_InitStructure);
+  GPIO_Init(OS_DUMP_IRQ_GPIO_PORT, &GPIO_InitStructure);
 
   GPIO_EXTILineConfig(OS_DUMP_IRQ_GPIO_PORT_SOURCE, OS_DUMP_IRQ_GPIO_PIN_SOURCE);
 

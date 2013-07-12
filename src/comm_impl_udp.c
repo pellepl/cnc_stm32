@@ -46,6 +46,8 @@ comm *COMM_UDP_get_comm() {
 
 // *** phy
 
+#ifdef CONFIG_ETHSPI
+
 //typedef int (*comm_phy_tx_char_fn)(unsigned char c);
 static int COMM_UDP_tx_char(unsigned char c) {
   ecomm.tx_frame[ecomm.tx_ix++] = c;
@@ -153,8 +155,10 @@ static void COMM_UDP_free(comm *c, void *data, void *arg) {
   ASSERT(ecomm_data.canary2 == 0xfedc1234);
   ASSERT(ecomm_data.canary3 == 0x5678abcd);
 }
+#endif // CONFIG_ETHSPI
 
 void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data) {
+#ifdef CONFIG_ETHSPI
   if (a != COMM_CONTROLLER_ADDRESS) return;
   beacon_info bi;
 
@@ -169,11 +173,13 @@ void COMM_UDP_beacon_handler(comm_addr a, u8_t type, u16_t len, u8_t *data) {
     client_set_gwmac(&ecomm.cur_server.mac[0]);
     COMM_SYS_send_alive_packet();
   }
+#endif
 }
 
 static u32_t comm_udp_thr_stack[0x181];
 
 void COMM_UDP_init() {
+#ifdef CONFIG_ETHSPI
   DBG(D_COMM, D_DEBUG, "COMM UDP init\n");
   memset(&ecomm, 0, sizeof(comm));
 
@@ -201,4 +207,5 @@ void COMM_UDP_init() {
   comm_init_alloc(&ecomm.driver, COMM_UDP_alloc, COMM_UDP_free);
 
   // stack now active
+#endif
 }

@@ -150,12 +150,9 @@
 
 #ifdef CONFIG_SPI
 
-// enable/disable chunking when rxing over spi
-//#define CONFIG_SPI_CHUNK_RX
-
 // make SPI driver use polling method, otherwise DMA requests are used
 // warning - polling method should only be used for debugging and may be
-// unstable. Do not sent multitudes of data using this flag
+// unstable. Do nod sent multitudes of data using this config
 //#define CONFIG_SPI_POLL
 
 #define SPI1_MASTER_GPIO              GPIOA

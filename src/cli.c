@@ -144,6 +144,7 @@ static int f_hardfault(int a) {
 #pragma GCC diagnostic pop
 }
 
+#ifdef CONFIG_SPIFFS
 #include "spiffs.h"
 os_thread spiffs_thr;
 
@@ -314,7 +315,7 @@ static int f_spiffs_check() {
   spiffs_run(6);
   return 0;
 }
-
+#endif
 
 
 #if 0
@@ -1140,6 +1141,7 @@ static cmd c_tbl[] = {
         .help = "Test func\n"
     },
 #endif
+#ifdef CONFIG_SPIFFS
     {.name = "spiffs_mount",     .fn = (func)f_spiffs_mount,
         .help = "Mount spiffs\n"
     },
@@ -1161,6 +1163,7 @@ static cmd c_tbl[] = {
     {.name = "spiffs_check",     .fn = (func)f_spiffs_check,
         .help = "Check spiffs consistency\n"
     },
+#endif
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\
         "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"\

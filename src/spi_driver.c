@@ -25,17 +25,10 @@
 spi_bus __spi_bus_vec[SPI_MAX_ID];
 
 // Finalizes hw blocks of a spi operation
-static void SPI_finalize(spi_bus *s, char keep_alive) {
+static void SPI_finalize(spi_bus *s) {
 #ifndef CONFIG_SPI_POLL
   DMA_Cmd(s->dma_tx_channel, DISABLE);
   DMA_Cmd(s->dma_rx_channel, DISABLE);
-  if (!keep_alive) {
-    ////DBG(D_SPI, D_FATAL, "SPI end await rxne\n");
-    ////while (SPI_I2S_GetITStatus(s->hw, SPI_I2S_IT_RXNE) != SET);
-    ////DBG(D_SPI, D_FATAL, "SPI end await rxe\n");
-    ////while (SPI_I2S_GetITStatus(s->hw, SPI_I2S_IT_TXE) != SET);
-    //SPI_Cmd(s->hw, DISABLE);
-  }
 #endif
 }
 
@@ -45,7 +38,7 @@ static void SPI_finish(spi_bus *s) {
     if (s->rx_buf) {
       memcpy(s->rx_buf, s->buf, s->rx_len);
     }
-    SPI_finalize(s, s->keep_alive);
+    SPI_finalize(s);
     s->busy = FALSE;
     if (s->spi_bus_callback) {
       s->spi_bus_callback(s);
@@ -53,12 +46,20 @@ static void SPI_finish(spi_bus *s) {
   }
 }
 
-// Initiates a spi rx/tx opertaion
-static void SPI_begin(spi_bus *s, u16_t tx_len, u16_t rx_len, u8_t *actual_target) {
+/* Initiates a spi rx/tx operation
+   @param s               the spi bus to use
+   @param tx_len          number of bytes to tx
+   @param tx              tx buffer
+                          if 0, things are sent from the bus struct's buffer (buf)
+   @param rx_len          number of bytes to receive
+   @param rx              where to actually put received bytes
+                          if 0, things are received into the bus struct's buffer (buf)
+ */
+static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx) {
 #ifdef CONFIG_SPI_POLL
   u16_t tx_ix = 0;
   u16_t rx_ix = 0;
-  if (actual_target == NULL) {
+  if (rx == NULL) {
     rx_len = 0;
   }
   // clear rx buffer would we have txed something
@@ -78,9 +79,9 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u16_t rx_len, u8_t *actual_targe
         SPI_I2S_SendData(s->hw, 0xff);
       }
       while (SPI_I2S_GetFlagStatus(s->hw, SPI_I2S_FLAG_RXNE) == RESET);
-      if (actual_target) {
+      if (rx) {
         u8_t r = SPI_I2S_ReceiveData(s->hw);;
-        actual_target[rx_ix++] = r;
+        rx[rx_ix++] = r;
         //print("R%02x ", r);
       } else {
         rx_ix++;
@@ -96,32 +97,50 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u16_t rx_len, u8_t *actual_targe
   DBG(D_SPI, D_DEBUG, " -- SPI tx:%04x rx:%04x\n", tx_ix, rx_ix);
   SPI_finish(s);
 #else
-  // if no actual target: put rxed data into temp buffer, overwriting tx data
-  // but this is put into shift register before overwrite
-  s->dma_rx_channel->CMAR = (u32_t)(actual_target == 0 ? s->buf : actual_target);
-  s->dma_rx_channel->CNDTR = rx_len;
-  s->dma_tx_channel->CMAR = (u32_t)s->buf;
-  s->dma_tx_channel->CNDTR = tx_len == 0 ? rx_len : tx_len;
 
-#ifndef CONFIG_SPI_CHUNK_RX
+  // .. here be dragons...
+
+  // set up tx channel
   if (tx_len == 0) {
-    // only rx, so tx same byte
-    s->buf[0] = 0xff;
+    // only receiving, so send ff's to clock in data
+    s->dummy = 0xff;
     s->dma_tx_channel->CCR &= ~DMA_MemoryInc_Enable;
+    s->dma_tx_channel->CNDTR = rx_len;
+    s->dma_tx_channel->CMAR = (u32_t)&s->dummy;
   } else {
-    // (rx)/tx, so tx buffer
     s->dma_tx_channel->CCR |= DMA_MemoryInc_Enable;
+    s->dma_tx_channel->CNDTR = tx_len;
+    s->dma_tx_channel->CMAR = (u32_t)(tx == 0 ? s->buf : tx);
   }
-#endif
+
+  //print("SPI DMA tx addr:%08x len:%i inc:%s\n", s->dma_tx_channel->CMAR, s->dma_tx_channel->CNDTR,
+  //    (s->dma_tx_channel->CCR & DMA_MemoryInc_Enable) ? "ON" : "OFF");
+
+  // set up rx channel
+  if (rx_len == 0) {
+    // only sending, but receive ignored data to get irq when all is rxed
+    u32_t rx_addr = (u32_t)&s->dummy;
+    //u32_t rx_addr = (u32_t)&s->buf[0];
+    s->dma_rx_channel->CCR &= ~DMA_MemoryInc_Enable;
+    s->dma_rx_channel->CNDTR = tx_len;
+    s->dma_rx_channel->CMAR = rx_addr;
+  } else {
+    s->dma_rx_channel->CCR |= DMA_MemoryInc_Enable;
+    s->dma_rx_channel->CNDTR = rx_len;
+    s->dma_rx_channel->CMAR = (u32_t)(rx == 0 ? s->buf : rx);
+  }
+
+  //print("SPI DMA rx addr:%08x len:%i inc:%s\n", s->dma_rx_channel->CMAR, s->dma_rx_channel->CNDTR,
+  //    (s->dma_rx_channel->CCR & DMA_MemoryInc_Enable) ? "ON" : "OFF");
 
   DMA_Cmd(s->dma_rx_channel, ENABLE);
   DMA_Cmd(s->dma_tx_channel, ENABLE);
-  //SPI_Cmd(s->hw, ENABLE);
+
 #endif // CONFIG_SPI_POLL
 }
 
 int SPI_close(spi_bus *s) {
-  SPI_finalize(s, FALSE);
+  SPI_finalize(s);
   SPI_Cmd(s->hw, DISABLE);
   s->user_p = 0;
   s->user_arg = 0;
@@ -179,47 +198,31 @@ int SPI_config(spi_bus *s, u16_t config) {
   return SPI_OK;
 }
 
-int SPI_tx(spi_bus *s, u8_t *tx, u16_t len, bool keep_alive) {
+int SPI_tx(spi_bus *s, u8_t *tx, u16_t len) {
   if (s->busy) {
     return SPI_ERR_BUS_BUSY;
   }
   s->busy = TRUE;
-  if (len > s->max_buf_len) {
-    s->busy = FALSE;
-    return SPI_ERR_BUS_LEN_EXCEEDED;
-  }
-  // get tx data into temp buffer
-  // receive phony data into temp buffer
-  memcpy(s->buf, tx, len);
-  s->keep_alive = keep_alive;
+
+  // read phony rx data into dummy byte
   s->rx_buf = 0; // no memcpy at DMA irq
-  s->rx_len = 0;
-  SPI_begin(s, len, len, 0);
+  SPI_begin(s, len, tx, 0, 0);
   return SPI_OK;
 }
 
-int SPI_rx(spi_bus *s, u8_t *rx, u16_t len, bool keep_alive)  {
+int SPI_rx(spi_bus *s, u8_t *rx, u16_t len)  {
   if (s->busy) {
     return SPI_ERR_BUS_BUSY;
   }
   s->busy = TRUE;
-#ifdef CONFIG_SPI_CHUNK_RX
-  if (len > s->max_buf_len) {
-    s->busy = FALSE;
-    return SPI_ERR_BUS_LEN_EXCEEDED;
-  }
-#endif
 
-  // read phony tx data from temp buffer
-  // write rx data directly to destination, no memcpy afterwards
-  s->keep_alive = keep_alive;
+  // read phony tx data from dummy byte
   s->rx_buf = 0; // no memcpy at DMA irq
-  s->rx_len = 0;
-  SPI_begin(s, 0, len, rx);
+  SPI_begin(s, 0, 0, len, rx);
   return SPI_OK;
 }
 
-int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len, bool keep_alive) {
+int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len) {
   if (s->busy) {
     return SPI_ERR_BUS_BUSY;
   }
@@ -236,10 +239,9 @@ int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len, bool ke
   // this is due to tx_len might be bigger than rx len so DMA may not write
   // directly to rx buf
   memcpy(s->buf, tx, tx_len);
-  s->keep_alive = keep_alive;
-  s->rx_buf = rx; // memcpy at DMA irq
+  s->rx_buf = rx; // memcpy at DMA finish irq
   s->rx_len = rx_len;
-  SPI_begin(s, maxlen, maxlen, 0);
+  SPI_begin(s, maxlen, 0, maxlen, 0);
   return SPI_OK;
 }
 

@@ -114,12 +114,11 @@ static void SPI_DEV_exec(spi_dev *dev) {
     }
     // chunk too big things up
     u16_t len_to_tx = MIN(dev->cur_seq.tx_len, dev->bus->max_buf_len);
-    bool keep_alive = dev->cur_seq.rx_len > 0 || dev->seq_len > 0;
     u8_t *tx_buf = dev->cur_seq.tx;
-    DBG(D_SPI, D_DEBUG, "SPI DEV exe   tx %04x / %04x keep_alive:%u\n", len_to_tx, dev->cur_seq.tx_len, keep_alive);
+    DBG(D_SPI, D_DEBUG, "SPI DEV exe   tx %04x / %04x\n", len_to_tx, dev->cur_seq.tx_len);
     dev->cur_seq.tx_len -= len_to_tx;
     dev->cur_seq.tx += len_to_tx;
-    res = SPI_tx(dev->bus, tx_buf, len_to_tx, keep_alive);
+    res = SPI_tx(dev->bus, tx_buf, len_to_tx);
     if (res != SPI_OK) {
       SPI_DEV_finish(dev, res);
     }
@@ -128,11 +127,10 @@ static void SPI_DEV_exec(spi_dev *dev) {
     if (cs_released) {
       SPI_DEV_cs(dev, TRUE);
     }
-    bool keep_alive = dev->seq_len > 0;
     u16_t rx_len = dev->cur_seq.rx_len;
-    DBG(D_SPI, D_DEBUG, "SPI DEV exe   rx %04x keep_alive:%i\n", dev->cur_seq.rx_len, keep_alive);
+    DBG(D_SPI, D_DEBUG, "SPI DEV exe   rx %04x\n", dev->cur_seq.rx_len);
     dev->cur_seq.rx_len = 0;
-    res = SPI_rx(dev->bus, dev->cur_seq.rx, rx_len, keep_alive);
+    res = SPI_rx(dev->bus, dev->cur_seq.rx, rx_len);
     if (res != SPI_OK) {
       SPI_DEV_finish(dev, res);
     }

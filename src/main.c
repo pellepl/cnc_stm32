@@ -29,6 +29,7 @@ os_thread kernel_thread;
 
 #define SPIFFS_TEST_THR
 
+#ifdef CONFIG_SPIFFS
 #ifdef SPIFFS_TEST_THR
 os_thread spiffs_test_thr;
 u32_t spiffs_test_stack[0x200];
@@ -63,6 +64,7 @@ static void *spiffs_test_thr_func(void *a) {
   }
   return NULL;
 }
+#endif
 #endif
 
 #ifdef DBG_OS_THREAD_BLINKY
@@ -105,16 +107,18 @@ static void *kernel_func(void *a) {
   COMM_UART_init(_UART(COMMIN));
   COMM_UDP_init();
   COMM_init();
-  // TODO PETER COMM_set_stack(COMM_UART_get_comm());
-  COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
+  COMM_set_stack(COMM_UART_get_comm(), 0);
+  // TODO PETER COMM_set_stack(COMM_UDP_get_comm(), COMM_UDP_beacon_handler);
   COMM_SYS_init();
   COMM_FILE_init();
 #ifdef CONFIG_CNC
   COMM_CNC_init();
 #endif
 
+#ifdef CONFIG_ETHSPI
   ETH_SPI_init();
   ETH_SPI_start();
+#endif
 
   SFOS_init();
 
@@ -139,6 +143,7 @@ static void *kernel_func(void *a) {
       "dbg_blink");
 #endif
 
+#ifdef CONFIG_SPIFFS
 #ifdef SPIFFS_TEST_THR
   OS_thread_create(
       &spiffs_test_thr,
@@ -148,6 +153,7 @@ static void *kernel_func(void *a) {
       spiffs_test_stack,
       sizeof(spiffs_test_stack)-4,
       "test_spiffs");
+#endif
 #endif
 
   while (1) {

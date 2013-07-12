@@ -15,9 +15,6 @@
 
 static int spi_flash_send_write_sequence(spi_flash_dev *sfd);
 static int spi_flash_send_erase_sequence(spi_flash_dev *sfd);
-#ifdef CONFIG_SPI_CHUNK_RX
-static int SPI_FLASH_send_read_sequence(spi_flash_dev *sfd);
-#endif
 
 static int spi_flash_exec(spi_flash_dev *sfd, spi_dev_sequence *seq, u8_t seq_len) {
   LED_blink_single(LED_SPI_FLASH_BIT, 2,1, LED_BLINK_FOREVER);
@@ -137,24 +134,9 @@ static void spi_flash_update_state(spi_flash_dev *sfd) {
 
   // read data
   case SPI_FLASH_STATE_READ:
-#ifndef CONFIG_SPI_CHUNK_RX
     sfd->state = SPI_FLASH_STATE_OPENED;
     TASK_run(sfd->task, res, sfd);
     break;
-#else
-    {
-      if (sfd->count > 0) {
-        // more to read
-        res = SPI_FLASH_send_read_sequence(sfd);
-      } else {
-        // finished
-        sfd->state = SPI_FLASH_STATE_OPENED;
-        sfd->busy = FALSE;
-        TASK_run(sfd->task, res, sfd);
-      }
-      break;
-    }
-#endif
   // write data
   case SPI_FLASH_STATE_WRITE_SEQ:
     sfd->state = SPI_FLASH_STATE_WRITE_WAIT;
@@ -386,49 +368,6 @@ int SPI_FLASH_read_busy(spi_flash_dev *sfd, spi_flash_callback cb, u8_t *res) {
   return spi_flash_exec(sfd, &seq, 1);
 }
 
-#ifdef CONFIG_SPI_CHUNK_RX
-static int spi_flash_send_read_sequence(spi_flash_dev *sfd) {
-  u32_t addr = sfd->addr;
-  u32_t len_to_read = MIN(sfd->dev.bus->max_buf_len, sfd->count);
-
-  sfd->tmp_buf[0] = sfd->flash_conf.cmd_defs[SPI_FLASH_CMD_READ];
-  spi_flash_fill_in_address(sfd, &sfd->tmp_buf[1], addr);
-  sfd->sequence_buf[0].tx = &sfd->tmp_buf[0];
-  sfd->sequence_buf[0].tx_len = 1 + sfd->flash_conf.addressing_bytes + 1;
-  sfd->sequence_buf[0].rx = (u8_t*)sfd->ptr;
-  sfd->sequence_buf[0].rx_len = len_to_read;
-  sfd->sequence_buf[0].cs_release = 0;
-
-  int res = spi_flash_exec(sfd, &sfd->sequence_buf[0], 1);
-
-  if (res == SPI_OK) {
-    sfd->addr += len_to_read;
-    sfd->ptr += len_to_read;
-    sfd->count -= len_to_read;
-  }
-
-  return res;
-}
-
-int SPI_FLASH_read(spi_flash_dev *sfd, u32_t addr, u16_t size, u8_t *dest) {
-  if (addr > sfd->flash_conf.size_total || (addr+size) > sfd->flash_conf.size_total) {
-    return SPI_FLASH_ERROR_ADDRESS;
-  }
-  if (sfd->busy) {
-    return SPI_ERR_BUSY;
-  }
-  sfd->busy = TRUE;
-  sfd->state = SPI_FLASH_STATE_READ;
-
-  sfd->addr = addr;
-  sfd->ptr = dest;
-  sfd->count = size;
-
-  return spi_flash_send_read_sequence(sfd);
-}
-
-#else
-
 int SPI_FLASH_read(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u16_t size, u8_t *dest) {
   if (!sfd->open) {
     return SPI_FLASH_ERR_CLOSED;
@@ -453,7 +392,6 @@ int SPI_FLASH_read(spi_flash_dev *sfd, spi_flash_callback cb, u32_t addr, u16_t 
 
   return spi_flash_exec(sfd, &sfd->sequence_buf[0], 1);
 }
-#endif
 
 static int spi_flash_send_write_sequence(spi_flash_dev *sfd) {
   u32_t addr = sfd->addr;
@@ -642,9 +580,8 @@ char SPI_FLASH_is_busy(spi_flash_dev *sfd) {
 
 void SPI_FLASH_dump(spi_flash_dev *sfd) {
   print("SPI FLASH DEV\n-------------\n");
-  print("  bus busy:%i keepalive:%i rx:%p rx_len:%i uarg:%08x uptr:%p\n",
+  print("  bus busy:%i rx:%p rx_len:%i uarg:%08x uptr:%p\n",
         sfd->dev.bus->busy,
-        sfd->dev.bus->keep_alive,
         sfd->dev.bus->rx_buf,
         sfd->dev.bus->rx_len,
         sfd->dev.bus->user_arg,
