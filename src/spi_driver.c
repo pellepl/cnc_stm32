@@ -99,6 +99,9 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
 #else
 
   // .. here be dragons...
+  // seems to be a compiler thing - adding compile breaks
+
+  __NOP();
 
   // set up tx channel
   if (tx_len == 0) {
@@ -112,6 +115,8 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
     s->dma_tx_channel->CNDTR = tx_len;
     s->dma_tx_channel->CMAR = (u32_t)(tx == 0 ? s->buf : tx);
   }
+
+  __NOP();
 
   //print("SPI DMA tx addr:%08x len:%i inc:%s\n", s->dma_tx_channel->CMAR, s->dma_tx_channel->CNDTR,
   //    (s->dma_tx_channel->CCR & DMA_MemoryInc_Enable) ? "ON" : "OFF");
@@ -129,6 +134,8 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
     s->dma_rx_channel->CNDTR = rx_len;
     s->dma_rx_channel->CMAR = (u32_t)(rx == 0 ? s->buf : rx);
   }
+
+  __NOP();
 
   //print("SPI DMA rx addr:%08x len:%i inc:%s\n", s->dma_rx_channel->CMAR, s->dma_rx_channel->CNDTR,
   //    (s->dma_rx_channel->CCR & DMA_MemoryInc_Enable) ? "ON" : "OFF");
