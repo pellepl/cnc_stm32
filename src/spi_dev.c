@@ -6,6 +6,7 @@
  */
 #include "spi_dev.h"
 #include "miniutils.h"
+#include "system.h"
 
 #ifdef CONFIG_SPI
 

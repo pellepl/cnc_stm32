@@ -61,7 +61,9 @@ MKDIR = mkdir -p
 #
 ###############
 
-INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} -I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src -I./${spiffs_dir}/src
+INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} \
+-I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src -I./${spiffs_dir}/src \
+-I./${sourcedir}/usb
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2
 #-ffunction-sections -fdata-sections
 COMPILEROPTIONS += -O3
@@ -170,6 +172,14 @@ FILES += 	system_stm32f10x.c \
 # stm32 system
 FILES +=	stm32f10x_it.c
 
+# usb files
+FILES +=	usb_core.c \
+			usb_init.c \
+			usb_int.c \
+			usb_mem.c \
+			usb_regs.c \
+			usb_sil.c
+
 # bootloader files
 RFILES =	bootloader.c \
 			bootloader_hal.c
@@ -184,7 +194,10 @@ BINARYEXT = .hex
 #
 ############
 
-vpath %.c ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore} ${comm_dir}/src ${tinyheap_dir}/src ${enc28j60_dir}/src ${spiffs_dir}/src
+vpath %.c ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore} ${comm_dir}/src \
+${tinyheap_dir}/src ${enc28j60_dir}/src ${spiffs_dir}/src \
+${sourcedir}/usb
+
 vpath %.s ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdir}/startup/gcc_ride7
 
 SOBJFILES = $(SFILES:%.s=${builddir}/%.o)

@@ -375,10 +375,10 @@ static u8_t i2c_scan_addr;
 
 void i2c_scan_report_task(u32_t addr, void *res) {
   if (addr == 0) {
-    print("\n   x0 x2 x4 x6 x8 xa xc xe");
+    print("\n    0  2  4  6  8  a  c  e");
   }
   if ((addr & 0x0f) == 0) {
-    print("\n%xx ", ((addr>>4) & 0xf));
+    print("\n%2x ", addr & 0xf0);
   }
 
   print("%s", (char *)res);
