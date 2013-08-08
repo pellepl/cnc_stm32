@@ -11,8 +11,8 @@
 #include "system.h"
 
 s32_t SFOS_erase(u32_t addr, u32_t size);
-s32_t SFOS_read(u32_t addr, u16_t size, u8_t *dst);
-s32_t SFOS_write(u32_t addr, u16_t size, u8_t *src);
+s32_t SFOS_read(u32_t addr, u32_t size, u8_t *dst);
+s32_t SFOS_write(u32_t addr, u32_t size, u8_t *src);
 void SFOS_init();
 
 

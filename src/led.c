@@ -30,7 +30,7 @@ static struct {
 static void LED_enable_intern(led_t led) {
   led_shift.current_led |= led;
   led_shift.dirty = TRUE;
-  // TODO PETER REMOV
+  // TODO PETER REMOVE
   if (led & LED_SPI_FLASH) {
     GPIO_enable(GPIOD, GPIO_Pin_13);
   }

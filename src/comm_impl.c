@@ -45,7 +45,7 @@ void COMM_set_stack(comm *driver,
 }
 
 int COMM_tx(int dst, u8_t* data, u16_t len, int ack) {
-  // TODO register protcol for ack
+  // TODO register protocol for ack
 #if COMM_IMPL_STATS
   pktcount_tx++;
 #endif

@@ -204,13 +204,12 @@ extern volatile u32_t _trace_log_ix;
     }
 
 #define TRACE_IRQ_NAMES \
-{ \
-  "<>", \
-  "UART1", "UART2", "UART3", "UART4", \
-  "TIM2", "DMA_SPI1_RX", "DMA_SPI1_TX", \
-  "DMA_SPI2_RX", "DMA_SPI2_RX", \
-  "EXTI_ETH_SPI", "EXTI_DBG", \
-  "PENDSV", "SYSTICK", "I2C_ER", "I2C_EV" \
+{ "<>", \
+  "UART1",        "UART2",        "UART3",        "UART4", \
+  "TIM2",         "DMA_SPI1_RX",  "DMA_SPI1_TX",  "DMA_SPI2_RX", \
+  "DMA_SPI2_RX",  "EXTI_ETH_SPI", "EXTI_DBG",     "PENDSV", \
+  "SYSTICK",      "I2C_ER",       "I2C_EV",       "USB_WKU", \
+  "USB_LP", \
 }
 #else
 #define TRACE_LOG(op, var)

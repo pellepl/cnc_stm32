@@ -164,6 +164,7 @@ s32_t UART_put_char(uart *u, u8_t c) {
     return 0;
   } else {
     s32_t res;
+    int max_tries = 0x10000;
     do {
       res = 0;
 
@@ -176,7 +177,7 @@ s32_t UART_put_char(uart *u, u8_t c) {
         res = -1;
       }
       UART_TX_IRQ_ON(u);
-    } while (u->assure_tx && res != 0);
+    } while (u->assure_tx && res != 0 && --max_tries > 0);
     return res;
   }
 }

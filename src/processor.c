@@ -74,6 +74,12 @@ static void RCC_config() {
   RCC_ADCCLKConfig(RCC_PCLK2_Div2);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
 #endif
+
+#ifdef CONFIG_USB_CDC
+  RCC_APB2PeriphClockCmd(RCC_AHBPeriph_GPIO_DISCONNECT, ENABLE);
+  RCC_USBCLKConfig(RCC_USBCLKSource_PLLCLK_1Div5);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
+#endif
 }
 
 static void NVIC_config(void)
@@ -146,6 +152,13 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(OS_DUMP_IRQ_EXTI_IRQn);
 #endif
 
+#ifdef CONFIG_USB_CDC
+  NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, NVIC_EncodePriority(prioGrp, 3, 0));
+  NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
+
+  NVIC_SetPriority(USBWakeUp_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
+  NVIC_EnableIRQ(USBWakeUp_IRQn);
+#endif
 }
 
 static void UART1_config() {
@@ -576,6 +589,24 @@ static void I2C_config() {
 #endif
 }
 
+static void USB_CDC_config() {
+#ifdef CONFIG_USB_CDC
+  GPIO_InitTypeDef GPIO_InitStructure;
+  EXTI_InitTypeDef EXTI_InitStructure;
+
+  GPIO_InitStructure.GPIO_Pin = USB_DISCONNECT_PIN;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(USB_DISCONNECT, &GPIO_InitStructure);
+
+  EXTI_ClearITPendingBit(EXTI_Line18);
+  EXTI_InitStructure.EXTI_Line = EXTI_Line18;
+  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+  EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+  EXTI_Init(&EXTI_InitStructure);
+#endif
+}
+
 // bootloader settings
 
 static void SPI_config_bootloader() {
@@ -617,6 +648,7 @@ void PROC_periph_init() {
   CNC_config();
   ADC_config();
   I2C_config();
+  USB_CDC_config();
   OS_DUMP_IRQ_config();
 }
 

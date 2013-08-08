@@ -84,7 +84,7 @@ s32_t SFOS_erase(u32_t addr, u32_t size) {
   return res;
 }
 
-s32_t SFOS_read(u32_t addr, u16_t size, u8_t *dst) {
+s32_t SFOS_read(u32_t addr, u32_t size, u8_t *dst) {
   s32_t res;
   OS_mutex_lock(&sfos.lock);
   sfos.args[0] = addr;
@@ -95,7 +95,7 @@ s32_t SFOS_read(u32_t addr, u16_t size, u8_t *dst) {
   return res;
 }
 
-s32_t SFOS_write(u32_t addr, u16_t size, u8_t *src) {
+s32_t SFOS_write(u32_t addr, u32_t size, u8_t *src) {
   s32_t res;
   OS_mutex_lock(&sfos.lock);
   sfos.args[0] = addr;

@@ -378,7 +378,7 @@ void i2c_scan_report_task(u32_t addr, void *res) {
     print("\n    0  2  4  6  8  a  c  e");
   }
   if ((addr & 0x0f) == 0) {
-    print("\n%2x ", addr & 0xf0);
+    print("\n%02x ", addr & 0xf0);
   }
 
   print("%s", (char *)res);
@@ -401,6 +401,24 @@ static int f_i2c_scan(void) {
   I2C_config(_I2C_BUS(0), 100000);
   I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
   return I2C_query(_I2C_BUS(0), i2c_scan_addr);
+}
+#endif
+
+#ifdef CONFIG_USB_CDC
+static int f_usb_init(void) {
+  USB_Init();
+  return 0;
+}
+static int f_usb_tx(u8_t *buf) {
+  u8_t d;
+  while ((d = *buf++) != 0) {
+    USB_Transmit(d);
+  }
+  return 0;
+}
+static int f_usb_cable(u8_t en) {
+  USB_Cable_Config(en ? ENABLE : DISABLE);
+  return 0;
 }
 #endif
 
@@ -1214,6 +1232,18 @@ static cmd c_tbl[] = {
         .help = "scans i2c bus for all addresses\n"
     },
 
+#endif
+
+#ifdef CONFIG_USB_CDC
+    {.name = "usb_init",     .fn = (func)f_usb_init,
+        .help = "Initializes USB CDC device\n"
+    },
+    {.name = "usb_tx",       .fn = (func)f_usb_tx,
+        .help = "Sends data over usb\n"
+    },
+    {.name = "usb_cable",       .fn = (func)f_usb_cable,
+        .help = "USB cable in/out\n"
+    },
 #endif
 
     {.name = "rdnv",     .fn = (func)f_read_nvram,

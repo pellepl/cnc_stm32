@@ -269,6 +269,17 @@
 
 #define CONFIG_ADC
 
+/** USB CDC VIRTUAL SERIAL PORT */
+
+#define CONFIG_USB_CDC
+
+#define USB_DISCONNECT                      GPIOC
+#define USB_DISCONNECT_PIN                  GPIO_Pin_13
+#define RCC_AHBPeriph_GPIO_DISCONNECT       RCC_APB2Periph_GPIOC
+
+#define ID1                                 (0x1FFFF7E8)
+#define ID2                                 (0x1FFFF7EC)
+#define ID3                                 (0x1FFFF7F0)
 
 /****************************************************/
 /******** Application build time configuration ******/

@@ -5,6 +5,7 @@
 #include "os.h"
 #include "enc28j60_spi_eth.h"
 #include "i2c_driver.h"
+#include "usb_istr.h"
 
 /**
   * @brief  This function handles NMI exception.
@@ -186,7 +187,6 @@ void EXTI2_IRQHandler(void)
 }
 #endif
 
-
 void PendSV_Handler(void)
 {
   TRACE_IRQ_ENTER(12);
@@ -217,6 +217,25 @@ void I2C1_EV_IRQHandler(void)
   TRACE_IRQ_EXIT(15);
 }
 #endif
+
+#ifdef CONFIG_USB_CDC
+void USBWakeUp_IRQHandler(void)
+{
+  TRACE_IRQ_ENTER(16);
+  print("usbwku\n");
+  EXTI_ClearITPendingBit(EXTI_Line18);
+  TRACE_IRQ_EXIT(16);
+}
+
+void USB_LP_CAN1_RX0_IRQHandler(void)
+{
+  TRACE_IRQ_ENTER(17);
+  //print("usbistr\n");
+  USB_Istr();
+  TRACE_IRQ_EXIT(17);
+}
+#endif
+
 
 
 /**
