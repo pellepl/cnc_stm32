@@ -19,7 +19,7 @@
 #define TH_BLOCKSIZE                    32
 
 /* alignment of returned data pointers */
-#define TH_ALIGNMENT (4 - (sizeof(th_block_h)&3))
+#define TH_ADDRESS_ALIGN                4 /*sizeof(void*)*/
 
 /* keep track of free number of bytes in heap */
 #define TH_CALC_FREE                    1
@@ -28,7 +28,7 @@
 /* safety check if freeing a freed block */
 #define TH_CHECK_FREE_OF_FREE           1
 /* calculate a parity bit in each block header */
-#define TH_USE_PARITY                   1
+#define TH_USE_PARITY                   0
 /* when to check for parity */
 #define TH_PARITY_CHECK_LEVEL           TH_PARITY_CHECK_ALL
 
@@ -69,7 +69,7 @@
 #if TH_PICK_STRAT_GOOD_ENOUGH_FIT
 /* if nbr of delta blocks is equal or less, the free block
    is taken (0 means the same as BEST_FIT) */
-#define TH_GOOD_ENOUGH_DELTA            1
+#define TH_GOOD_ENOUGH_DELTA            2
 #endif
 
 /* in multithreading environments locking can be implemented here */
@@ -88,6 +88,7 @@
 
 
 #define TH_PRINTF(...)  print(__VA_ARGS__)
+#define TH_DUMP 1
 
 
 #endif /* TINYHEAP_CONFIG_H_ */

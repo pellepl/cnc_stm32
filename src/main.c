@@ -35,10 +35,10 @@ os_thread spiffs_test_thr;
 u32_t spiffs_test_stack[0x200];
 static void *spiffs_test_thr_func(void *a) {
   while (TRUE) {
-    OS_thread_sleep(5*1000);
+    OS_thread_sleep(1*1000);
     int c = 0;
     char b[64];
-    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), "count", 0, 0);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), "count", SPIFFS_RDWR, 0);
     if (fd > 0) {
       SPIFFS_read(
           FS_get_filesystem(),
@@ -51,8 +51,7 @@ static void *spiffs_test_thr_func(void *a) {
       //print("spiffs: read %i\n", c);
     }
     sprint(b, "%i%c", c+1,0);
-    fd = SPIFFS_open( FS_get_filesystem(), "count", 0,
-        SPIFFS_RDWR | SPIFFS_CREAT);
+    fd = SPIFFS_open( FS_get_filesystem(), "count", SPIFFS_RDWR | SPIFFS_CREAT | SPIFFS_TRUNC, 0);
     if (fd > 0) {
       SPIFFS_write(FS_get_filesystem(),
           fd,

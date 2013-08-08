@@ -9,7 +9,7 @@
 #include "tinyheap.h"
 #include "system.h"
 
-static u8_t _heap_data[TH_BLOCKSIZE * (127)];
+static u32_t _heap_data[TH_BLOCKSIZE * (127) / sizeof(u32_t)];
 static tinyheap _heap;
 
 void *HEAP_malloc(unsigned int size) {

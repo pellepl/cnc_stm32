@@ -64,7 +64,7 @@ MKDIR = mkdir -p
 INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} -I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src -I./${spiffs_dir}/src
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2
 #-ffunction-sections -fdata-sections
-COMPILEROPTIONS += -O3 
+COMPILEROPTIONS += -O3
 # -nostartfiles -nostdlib 
 ASSEMBLEROPTION = $(COMPILEROPTIONS)
 LINKERSCRIPT = arm.ld
@@ -105,6 +105,7 @@ FILES = 	processor.c \
 			spi_flash_os.c \
 			spi_dev_os_generic.c \
 			i2c_driver.c \
+			i2c_dev.c \
 			timer.c \
 			adc.c \
 			cnc_control.c \

@@ -46,6 +46,54 @@ void FS_sys_init() {
 #endif
 }
 
+static u32_t old_perc = 999;
+static void fs_check_cb_f(spiffs_check_type type, spiffs_check_report report,
+    u32_t arg1, u32_t arg2) {
+  if (report == SPIFFS_CHECK_PROGRESS) {
+    if (old_perc != arg1) {
+      old_perc = arg1;
+      print("CHECK REPORT: ");
+      switch(type) {
+      case SPIFFS_CHECK_LOOKUP:
+        print("LU "); break;
+      case SPIFFS_CHECK_INDEX:
+        print("IX "); break;
+      case SPIFFS_CHECK_PAGE:
+        print("PA "); break;
+      }
+      print("%i%%\n", (arg1 * 100) / 256);
+    }
+  } else {
+    print("   check: ");
+    switch (type) {
+    case SPIFFS_CHECK_INDEX:
+      print("INDEX  "); break;
+    case SPIFFS_CHECK_LOOKUP:
+      print("LOOKUP "); break;
+    case SPIFFS_CHECK_PAGE:
+      print("PAGE   "); break;
+    default:
+      print("????   "); break;
+    }
+    if (report == SPIFFS_CHECK_ERROR) {
+      print("ERROR %i", arg1);
+    } else if (report == SPIFFS_CHECK_DELETE_BAD_FILE) {
+      print("DELETE BAD FILE %04x", arg1);
+    } else if (report == SPIFFS_CHECK_DELETE_ORPHANED_INDEX) {
+      print("DELETE ORPHANED INDEX %04x", arg1);
+    } else if (report == SPIFFS_CHECK_DELETE_PAGE) {
+      print("DELETE PAGE %04x", arg1);
+    } else if (report == SPIFFS_CHECK_FIX_INDEX) {
+      print("FIX INDEX %04x:%04x", arg1, arg2);
+    } else if (report == SPIFFS_CHECK_FIX_LOOKUP) {
+      print("FIX INDEX %04x:%04x", arg1, arg2);
+    } else {
+      print("??");
+    }
+    print("\n");
+  }
+}
+
 void FS_mount() {
   spiffs_config cfg;
   #ifndef SPIFFS_SINGLETON
@@ -66,7 +114,8 @@ void FS_mount() {
       spiffs_fds,
       sizeof(spiffs_fds),
       spiffs_cache,
-      sizeof(spiffs_cache));
+      sizeof(spiffs_cache),
+      fs_check_cb_f);
 }
 
 spiffs *FS_get_filesystem() {

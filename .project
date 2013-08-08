@@ -80,6 +80,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>STM32_USB-FS-Device_Lib_V4.0.0</name>
+			<type>2</type>
+			<location>/home/petera/proj/stm32_lib/STM32_USB-FS-Device_Lib_V4.0.0</location>
+		</link>
+		<link>
 			<name>comm_src</name>
 			<type>2</type>
 			<location>/home/petera/proj/generic/comm/src</location>

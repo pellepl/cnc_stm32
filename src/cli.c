@@ -29,6 +29,7 @@
 #include "spi_flash_os.h"
 #include "spiffs_wrapper.h"
 #include "i2c_driver.h"
+#include "i2c_dev.h"
 
 static u8_t in[256];
 
@@ -167,7 +168,7 @@ static void *spiffs_thr_f(void *stack) {
     struct spiffs_dirent *pe = &e;
     SPIFFS_opendir(FS_get_filesystem(), "", &d);
     while ((pe = SPIFFS_readdir(&d, pe)) != 0) {
-      print("%s\t%i bytes\ttype %02x\n", pe->name, pe->size, pe->type);
+      print("   %s\t[%04x]\t%i bytes\ttype %02x\n", pe->name, pe->obj_id, pe->size, pe->type);
     }
     SPIFFS_closedir(&d);
     break;
@@ -186,7 +187,7 @@ static void *spiffs_thr_f(void *stack) {
   }
   case 4: {
     print("spiffs read %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, 0, 0);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, SPIFFS_RDONLY, 0);
     if (fd < 0) {
       print("err fd %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
@@ -230,7 +231,7 @@ static void *spiffs_thr_f(void *stack) {
   }
   case 5: {
     print("spiffs write %s\n", spiffs_path);
-    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, 0, SPIFFS_APPEND);
+    spiffs_file fd = SPIFFS_open(FS_get_filesystem(), spiffs_path, SPIFFS_RDWR|SPIFFS_APPEND, 0);
     if (fd < 0) {
       print("err %i\n", SPIFFS_errno(FS_get_filesystem()));
       break;
@@ -251,6 +252,12 @@ static void *spiffs_thr_f(void *stack) {
     print("res %i\n", res);
     break;
   }
+#if SPIFFS_TEST_VISUALISATION
+  case 7: {
+    print("spiffs vis\n");
+    SPIFFS_vis(FS_get_filesystem());
+  }
+#endif
   }
 
   print("spiffs end\n");
@@ -315,8 +322,87 @@ static int f_spiffs_check() {
   spiffs_run(6);
   return 0;
 }
+
+#if SPIFFS_TEST_VISUALISATION
+static int f_spiffs_vis() {
+  spiffs_run(7);
+  return 0;
+}
+#endif
 #endif
 
+#ifdef CONFIG_I2C
+
+static u8_t i2c_dev_reg = 0;
+static u8_t i2c_dev_val = 0;
+static i2c_dev i2c_device;
+static u8_t i2c_wr_data[2];
+static i2c_dev_sequence i2c_r_seqs[] = {
+    I2C_SEQ_TX(&i2c_dev_reg, 1),
+    I2C_SEQ_RX_STOP(&i2c_dev_val, 1)
+};
+static i2c_dev_sequence i2c_w_seqs[] = {
+    I2C_SEQ_TX_STOP(i2c_wr_data, 2),
+};
+
+static void i2c_test_cb(i2c_dev *dev, int result) {
+  print("i2c_dev_cb: reg %02x val %02x res:%i\n", i2c_dev_reg, i2c_dev_val, result);
+  I2C_DEV_close(&i2c_device);
+}
+
+static int f_i2c_read(int addr, int reg) {
+  I2C_DEV_init(&i2c_device, 100000, _I2C_BUS(0), addr);
+  I2C_DEV_set_callback(&i2c_device, i2c_test_cb);
+  I2C_DEV_open(&i2c_device);
+  i2c_dev_reg = reg;
+  I2C_DEV_sequence(&i2c_device, i2c_r_seqs, 2);
+  return 0;
+}
+
+static int f_i2c_write(int addr, int reg, int data) {
+  I2C_DEV_init(&i2c_device, 100000, _I2C_BUS(0), addr);
+  I2C_DEV_set_callback(&i2c_device, i2c_test_cb);
+  I2C_DEV_open(&i2c_device);
+  i2c_wr_data[0] = reg;
+  i2c_wr_data[1] = data;
+  i2c_dev_reg = reg;
+  i2c_dev_val = data;
+  I2C_DEV_sequence(&i2c_device, i2c_w_seqs, 1);
+  return 0;
+}
+
+static u8_t i2c_scan_addr;
+
+void i2c_scan_report_task(u32_t addr, void *res) {
+  if (addr == 0) {
+    print("\n   x0 x2 x4 x6 x8 xa xc xe");
+  }
+  if ((addr & 0x0f) == 0) {
+    print("\n%xx ", ((addr>>4) & 0xf));
+  }
+
+  print("%s", (char *)res);
+
+  if (i2c_scan_addr < 254) {
+    i2c_scan_addr += 2;
+    I2C_query(_I2C_BUS(0), i2c_scan_addr);
+  } else {
+    print("\n");
+  }
+}
+
+static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
+  task *report_scan_task = TASK_create(i2c_scan_report_task, 0);
+  TASK_run(report_scan_task, bus->addr & 0xfe, res == I2C_OK ? "UP " : ".. ");
+}
+
+static int f_i2c_scan(void) {
+  i2c_scan_addr = 0;
+  I2C_config(_I2C_BUS(0), 100000);
+  I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
+  return I2C_query(_I2C_BUS(0), i2c_scan_addr);
+}
+#endif
 
 #if 0
 #define USE_FSMC
@@ -1118,8 +1204,14 @@ static cmd c_tbl[] = {
 #endif
 
 #ifdef CONFIG_I2C
-    {.name = "i2c",     .fn = (func)I2C_test,
-        .help = "i2c test\n"
+    {.name = "i2c_r",     .fn = (func)f_i2c_read,
+        .help = "i2c read reg\n"
+    },
+    {.name = "i2c_w",     .fn = (func)f_i2c_write,
+        .help = "i2c write reg\n"
+    },
+    {.name = "i2c_scan",     .fn = (func)f_i2c_scan,
+        .help = "scans i2c bus for all addresses\n"
     },
 
 #endif
@@ -1163,6 +1255,11 @@ static cmd c_tbl[] = {
     {.name = "spiffs_check",     .fn = (func)f_spiffs_check,
         .help = "Check spiffs consistency\n"
     },
+#if SPIFFS_TEST_VISUALISATION
+    {.name = "spiffs_vis",     .fn = (func)f_spiffs_vis,
+        .help = "Visualize spiffs contents\n"
+    },
+#endif
 #endif
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\

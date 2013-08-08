@@ -116,6 +116,14 @@ void list_move_last(list_t* l, void* ve) {
     return;
   }
 
+  ASSERT(l);
+  ASSERT(((u32_t)l & 3) == 0);
+  if (((u32_t)ve & 3)) {
+    print("ve: %08x\n", ve);
+  }
+  ASSERT(((u32_t)ve & 3) == 0);
+  ASSERT(((u32_t)l->first_element & 3) == 0);
+
   // delete element, knowing it cannot be the only or the last one in list
   if (e == l->first_element) {
     // removing first element in list
