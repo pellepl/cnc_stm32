@@ -27,7 +27,7 @@
 
 os_thread kernel_thread;
 
-#define SPIFFS_TEST_THR
+//#define SPIFFS_TEST_THR
 
 #ifdef CONFIG_SPIFFS
 #ifdef SPIFFS_TEST_THR

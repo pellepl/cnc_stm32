@@ -229,9 +229,10 @@ void USBWakeUp_IRQHandler(void)
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-  TRACE_IRQ_ENTER(17);
+// Called once every ms
+//  TRACE_IRQ_ENTER(17);
   USB_Istr();
-  TRACE_IRQ_EXIT(17);
+//  TRACE_IRQ_EXIT(17);
 }
 #endif
 

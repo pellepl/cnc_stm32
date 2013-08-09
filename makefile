@@ -117,6 +117,7 @@ FILES = 	processor.c \
 			comm_proto_sys.c \
 			comm_proto_cnc.c \
 			miniutils.c \
+			ringbuf.c \
 			taskq.c \
 			heap.c \
 			cli.c \
