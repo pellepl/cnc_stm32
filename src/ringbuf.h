@@ -36,7 +36,8 @@ int ringbuf_putc(ringbuf *rb, u8_t c);
    @returns number of actual bytes returned or RB_ERR_EMPTY
  */
 int ringbuf_get(ringbuf *rb, u8_t *buf, u16_t len);
-/* Writes a region of data into ringbuffer
+/* Writes a region of data into ringbuffer.
+   @param buf can be null, whereas the read pointer is simply advanced
    @returns number of actual bytes written or RB_ERR_FULL
  */
 int ringbuf_put(ringbuf *rb, u8_t *buf, u16_t len);
@@ -44,7 +45,10 @@ int ringbuf_put(ringbuf *rb, u8_t *buf, u16_t len);
 int ringbuf_free(ringbuf *rb);
 /* Returns current read capacity of ringbuffer */
 int ringbuf_available(ringbuf *rb);
-/* Returns linear read capacity and pointer to buffer */
+/* Returns linear read capacity and pointer to buffer.
+   The read pointer can be advanced by calling ringbuf_get with
+   null argument for buf.
+ */
 int ringbuf_available_linear(ringbuf *rb, u8_t **ptr);
 
 #endif /* RINGBUF_H_ */

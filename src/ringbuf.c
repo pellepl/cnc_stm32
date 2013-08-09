@@ -86,9 +86,11 @@ int ringbuf_put(ringbuf *rb, u8_t *buf, u16_t len) {
     to_write -= part;
     rb->w_ix = 0;
   }
-  memcpy(&rb->buffer[rb->w_ix], buf, to_write);
-  rb->len += to_write;
-  rb->w_ix += to_write;
+  if (to_write > 0) {
+    memcpy(&rb->buffer[rb->w_ix], buf, to_write);
+    rb->len += to_write;
+    rb->w_ix += to_write;
+  }
   if (rb->w_ix == rb->max_len-1) {
     rb->w_ix = 0;
   }
@@ -116,11 +118,13 @@ int ringbuf_get(ringbuf *rb, u8_t *buf, u16_t len) {
     to_read -= part;
     rb->r_ix = 0;
   }
-  if (buf) {
-    memcpy(buf, &rb->buffer[rb->r_ix], to_read);
+  if (to_read > 0) {
+    if (buf) {
+      memcpy(buf, &rb->buffer[rb->r_ix], to_read);
+    }
+    rb->len -= to_read;
+    rb->r_ix += to_read;
   }
-  rb->len -= to_read;
-  rb->r_ix += to_read;
   if (rb->r_ix == rb->max_len-1) {
     rb->r_ix = 0;
   }

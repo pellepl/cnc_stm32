@@ -68,17 +68,16 @@ void EP1_IN_Callback (void)
       USB_Tx_State = 0;
       return;
     }
-    else 
+
+    if (avail > VIRTUAL_COM_PORT_DATA_SIZE)
     {
-      if (avail > VIRTUAL_COM_PORT_DATA_SIZE)
-      {
-        avail = VIRTUAL_COM_PORT_DATA_SIZE;
-      }
-      UserToPMABufferCopy(buf, ENDP1_TXADDR, avail);
-      ringbuf_get(&usart_rx_rb, 0, avail);
-      SetEPTxCount(ENDP1, avail);
-      SetEPTxValid(ENDP1); 
+      avail = VIRTUAL_COM_PORT_DATA_SIZE;
     }
+
+    UserToPMABufferCopy(buf, ENDP1_TXADDR, avail);
+    ringbuf_get(&usart_rx_rb, 0, avail);
+    SetEPTxCount(ENDP1, avail);
+    SetEPTxValid(ENDP1);
   }
 }
 
