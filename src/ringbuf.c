@@ -20,7 +20,9 @@ int ringbuf_getc(ringbuf *rb, u8_t *c) {
   if (rb->len == 0) {
     return RB_ERR_EMPTY;
   }
-  *c = rb->buffer[rb->r_ix];
+  if (c) {
+    *c = rb->buffer[rb->r_ix];
+  }
   if (rb->r_ix == rb->max_len-1) {
     rb->r_ix = 0;
   } else {
@@ -49,6 +51,19 @@ int ringbuf_available(ringbuf *rb) {
   return rb->len;
 }
 
+int ringbuf_available_linear(ringbuf *rb, u8_t **ptr) {
+  if (rb->len == 0) {
+    return 0;
+  } else {
+    *ptr = &rb->buffer[rb->r_ix];
+    if (rb->r_ix + rb->len < rb->max_len) {
+      return rb->len;
+    } else {
+      return rb->max_len - rb->r_ix;
+    }
+  }
+}
+
 int ringbuf_free(ringbuf *rb) {
   return rb->max_len - rb->len;
 }
@@ -64,10 +79,11 @@ int ringbuf_put(ringbuf *rb, u8_t *buf, u16_t len) {
   }
   to_write = len;
   if (rb->w_ix + len >= rb->max_len) {
-    memcpy(&rb->buffer[rb->w_ix], buf, rb->max_len - rb->w_ix);
-    rb->len += rb->max_len - rb->w_ix;
-    buf += rb->max_len - rb->w_ix;
-    to_write -= rb->max_len - rb->w_ix;
+    u16_t part = rb->max_len - rb->w_ix;
+    memcpy(&rb->buffer[rb->w_ix], buf, part);
+    rb->len += part;
+    buf +=part;
+    to_write -= part;
     rb->w_ix = 0;
   }
   memcpy(&rb->buffer[rb->w_ix], buf, to_write);
@@ -91,14 +107,19 @@ int ringbuf_get(ringbuf *rb, u8_t *buf, u16_t len) {
   }
   to_read = len;
   if (rb->r_ix + len >= rb->max_len) {
-    memcpy(buf, &rb->buffer[rb->r_ix], rb->max_len - rb->r_ix);
-    rb->len -= rb->max_len - rb->r_ix;
-    buf += rb->max_len - rb->r_ix;
-    to_read -= rb->max_len - rb->r_ix;
+    u16_t part = rb->max_len - rb->r_ix;
+    if (buf) {
+      memcpy(buf, &rb->buffer[rb->r_ix], part);
+      buf += part;
+    }
+    rb->len -= part;
+    to_read -= part;
     rb->r_ix = 0;
   }
-  memcpy(buf, &rb->buffer[rb->r_ix], to_read);
-  rb->len += to_read;
+  if (buf) {
+    memcpy(buf, &rb->buffer[rb->r_ix], to_read);
+  }
+  rb->len -= to_read;
   rb->r_ix += to_read;
   if (rb->r_ix == rb->max_len-1) {
     rb->r_ix = 0;

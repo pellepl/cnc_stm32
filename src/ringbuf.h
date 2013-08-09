@@ -44,5 +44,7 @@ int ringbuf_put(ringbuf *rb, u8_t *buf, u16_t len);
 int ringbuf_free(ringbuf *rb);
 /* Returns current read capacity of ringbuffer */
 int ringbuf_available(ringbuf *rb);
+/* Returns linear read capacity and pointer to buffer */
+int ringbuf_available_linear(ringbuf *rb, u8_t **ptr);
 
 #endif /* RINGBUF_H_ */

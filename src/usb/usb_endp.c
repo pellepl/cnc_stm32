@@ -33,6 +33,7 @@
 #include "usb_hw_config.h"
 #include "usb_istr.h"
 #include "usb_pwr.h"
+#include "ringbuf.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -43,10 +44,9 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 uint8_t USB_Rx_Buffer[VIRTUAL_COM_PORT_DATA_SIZE];
-extern  uint8_t USART_Rx_Buffer[];
-extern uint32_t USART_Rx_ptr_out;
-extern uint32_t USART_Rx_length;
-extern uint8_t  USB_Tx_State;
+extern ringbuf usart_rx_rb;
+extern uint8_t USB_Tx_State;
+
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -60,34 +60,23 @@ extern uint8_t  USB_Tx_State;
 *******************************************************************************/
 void EP1_IN_Callback (void)
 {
-  uint16_t USB_Tx_ptr;
-  uint16_t USB_Tx_length;
-  
   if (USB_Tx_State == 1)
   {
-    if (USART_Rx_length == 0)
-    {
+    u8_t *buf;
+    int avail = ringbuf_available_linear(&usart_rx_rb, &buf);
+    if (avail  == 0) {
       USB_Tx_State = 0;
+      return;
     }
     else 
     {
-      if (USART_Rx_length > VIRTUAL_COM_PORT_DATA_SIZE){
-        USB_Tx_ptr = USART_Rx_ptr_out;
-        USB_Tx_length = VIRTUAL_COM_PORT_DATA_SIZE;
-        
-        USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;
-        USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;
-      }
-      else 
+      if (avail > VIRTUAL_COM_PORT_DATA_SIZE)
       {
-        USB_Tx_ptr = USART_Rx_ptr_out;
-        USB_Tx_length = USART_Rx_length;
-        
-        USART_Rx_ptr_out += USART_Rx_length;
-        USART_Rx_length = 0;
+        avail = VIRTUAL_COM_PORT_DATA_SIZE;
       }
-      UserToPMABufferCopy(&USART_Rx_Buffer[USB_Tx_ptr], ENDP1_TXADDR, USB_Tx_length);
-      SetEPTxCount(ENDP1, USB_Tx_length);
+      UserToPMABufferCopy(buf, ENDP1_TXADDR, avail);
+      ringbuf_get(&usart_rx_rb, 0, avail);
+      SetEPTxCount(ENDP1, avail);
       SetEPTxValid(ENDP1); 
     }
   }

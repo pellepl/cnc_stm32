@@ -35,6 +35,7 @@
 #include "usb_desc.h"
 #include "usb_hw_config.h"
 #include "usb_pwr.h"
+#include "ringbuf.h"
 
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,9 +44,7 @@
 /* Private variables ---------------------------------------------------------*/
 ErrorStatus HSEStartUpStatus;
 uint8_t  USART_Rx_Buffer [USART_RX_DATA_SIZE];
-uint32_t USART_Rx_ptr_in = 0;
-uint32_t USART_Rx_ptr_out = 0;
-uint32_t USART_Rx_length  = 0;
+ringbuf usart_rx_rb;
 
 uint8_t  USB_Tx_State = 0;
 static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len);
@@ -169,50 +168,24 @@ void USB_Receive(uint8_t* data_buffer, uint8_t Nb_bytes)
 void Handle_USBAsynchXfer (void)
 {
   
-  uint16_t USB_Tx_ptr;
-  uint16_t USB_Tx_length;
-  
   if(USB_Tx_State != 1)
   {
-    if (USART_Rx_ptr_out == USART_RX_DATA_SIZE)
-    {
-      USART_Rx_ptr_out = 0;
-    }
-    
-    if(USART_Rx_ptr_out == USART_Rx_ptr_in)
-    {
+    u8_t *buf;
+    int avail = ringbuf_available_linear(&usart_rx_rb, &buf);
+    if (avail == 0) {
       USB_Tx_State = 0; 
       return;
     }
     
-    if(USART_Rx_ptr_out > USART_Rx_ptr_in) /* rollback */
-    { 
-      USART_Rx_length = USART_RX_DATA_SIZE - USART_Rx_ptr_out;
-    }
-    else 
+    if (avail > VIRTUAL_COM_PORT_DATA_SIZE)
     {
-      USART_Rx_length = USART_Rx_ptr_in - USART_Rx_ptr_out;
+      avail = VIRTUAL_COM_PORT_DATA_SIZE;
     }
-    
-    if (USART_Rx_length > VIRTUAL_COM_PORT_DATA_SIZE)
-    {
-      USB_Tx_ptr = USART_Rx_ptr_out;
-      USB_Tx_length = VIRTUAL_COM_PORT_DATA_SIZE;
-      
-      USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;
-      USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;
-    }
-    else
-    {
-      USB_Tx_ptr = USART_Rx_ptr_out;
-      USB_Tx_length = USART_Rx_length;
-      
-      USART_Rx_ptr_out += USART_Rx_length;
-      USART_Rx_length = 0;
-    }
+
     USB_Tx_State = 1; 
-    UserToPMABufferCopy(&USART_Rx_Buffer[USB_Tx_ptr], ENDP1_TXADDR, USB_Tx_length);
-    SetEPTxCount(ENDP1, USB_Tx_length);
+    UserToPMABufferCopy(buf, ENDP1_TXADDR, avail);
+    ringbuf_get(&usart_rx_rb, 0, avail);
+    SetEPTxCount(ENDP1, avail);
     SetEPTxValid(ENDP1); 
   }  
   
@@ -225,14 +198,7 @@ void Handle_USBAsynchXfer (void)
 *******************************************************************************/
 void USB_Transmit(u8_t d)
 {
-  USART_Rx_Buffer[USART_Rx_ptr_in] = d;
-  USART_Rx_ptr_in++;
-  
-  /* To avoid buffer overflow */
-  if(USART_Rx_ptr_in == USART_RX_DATA_SIZE)
-  {
-    USART_Rx_ptr_in = 0;
-  }
+  ringbuf_putc(&usart_rx_rb, d);
 }
 
 /*******************************************************************************
@@ -286,5 +252,11 @@ static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len)
     pbuf[ 2* idx + 1] = 0;
   }
 }
+
+void usb_hw_init(void) {
+  ringbuf_init(&usart_rx_rb, USART_Rx_Buffer, sizeof(USART_Rx_Buffer));
+}
+
+
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -45,17 +45,14 @@
 
 #define USART_RX_DATA_SIZE   2048
 /* Exported functions ------------------------------------------------------- */
-void Set_System(void);
-void Set_USBClock(void);
 void Enter_LowPowerMode(void);
 void Leave_LowPowerMode(void);
-void USB_Interrupts_Config(void);
 void USB_Cable_Config (FunctionalState NewState);
 void USB_Receive(uint8_t* data_buffer, uint8_t Nb_bytes);
 void USB_Transmit(u8_t d);
 void Handle_USBAsynchXfer (void);
 void Get_SerialNum(void);
-
+void usb_hw_init(void);
 /* External variables --------------------------------------------------------*/
 
 #endif  /*__HW_CONFIG_H*/
