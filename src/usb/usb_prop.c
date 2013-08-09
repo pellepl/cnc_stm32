@@ -134,7 +134,6 @@ void Virtual_Com_Port_init(void)
   USB_SIL_Init();
 
   bDeviceState = UNCONNECTED;
-  print("UNCONNECTED\n");
 }
 
 /*******************************************************************************
@@ -189,7 +188,6 @@ void Virtual_Com_Port_Reset(void)
   SetDeviceAddress(0);
   
   bDeviceState = ATTACHED;
-  print("ATTACHED\n");
 
 }
 
@@ -208,7 +206,6 @@ void Virtual_Com_Port_SetConfiguration(void)
   {
     /* Device configured */
     bDeviceState = CONFIGURED;
-    print("CONFIGURED\n");
   }
 }
 
@@ -222,8 +219,6 @@ void Virtual_Com_Port_SetConfiguration(void)
 void Virtual_Com_Port_SetDeviceAddress (void)
 {
   bDeviceState = ADDRESSED;
-  print("ADDRESSED\n");
-
 }
 
 /*******************************************************************************

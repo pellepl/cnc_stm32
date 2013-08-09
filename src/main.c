@@ -189,6 +189,9 @@ int main(void) {
 #ifdef CONFIG_I2C
   I2C_init();
 #endif
+#ifdef CONFIG_USB_CDC
+  USB_Init();
+#endif
 
   __enable_irq();
   print("\n\n\nHardware initialization done\n");

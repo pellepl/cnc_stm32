@@ -179,7 +179,7 @@ FILES +=	usb_core.c \
 			usb_mem.c \
 			usb_regs.c \
 			usb_sil.c \
-			hw_config.c \
+			usb_hw_config.c \
 			usb_desc.c \
 			usb_endp.c \
 			usb_istr.c \

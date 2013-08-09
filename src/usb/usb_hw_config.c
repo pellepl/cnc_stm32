@@ -33,7 +33,7 @@
 #include "usb_lib.h"
 #include "usb_prop.h"
 #include "usb_desc.h"
-#include "hw_config.h"
+#include "usb_hw_config.h"
 #include "usb_pwr.h"
 
 
@@ -66,8 +66,6 @@ void Enter_LowPowerMode(void)
 {
   /* Set the device state to suspend */
   bDeviceState = SUSPENDED;
-  print("SUSPENDED\n");
-
 }
 
 /*******************************************************************************
@@ -85,13 +83,10 @@ void Leave_LowPowerMode(void)
   {
     /* Device configured */
     bDeviceState = CONFIGURED;
-    print("CONFIGURED\n");
   }
   else
   {
     bDeviceState = ATTACHED;
-    print("ATTACHED\n");
-
   }
   /*Enable SystemCoreClock*/
   //SystemInit(); // TODO PETER - modification
