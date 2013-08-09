@@ -2290,7 +2290,7 @@ void CLI_TASK_on_input(u32_t len, void *p) {
   }
   u32_t rlen = UART_get_buf(_UART(STDIN), in, MIN(len, sizeof(in)));
   if (rlen != len) {
-    DBG(D_CLI, D_WARN, "CONS uart mismatch\n");
+    DBG(D_CLI, D_WARN, "CONS length mismatch\n");
     print(CLI_PROMPT);
     return;
   }

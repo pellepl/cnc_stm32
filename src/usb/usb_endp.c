@@ -30,7 +30,7 @@
 #include "usb_lib.h"
 #include "usb_desc.h"
 #include "usb_mem.h"
-#include "hw_config.h"
+#include "usb_hw_config.h"
 #include "usb_istr.h"
 #include "usb_pwr.h"
 
@@ -65,7 +65,7 @@ void EP1_IN_Callback (void)
   
   if (USB_Tx_State == 1)
   {
-    if (USART_Rx_length == 0) 
+    if (USART_Rx_length == 0)
     {
       USB_Tx_State = 0;
     }
@@ -76,7 +76,7 @@ void EP1_IN_Callback (void)
         USB_Tx_length = VIRTUAL_COM_PORT_DATA_SIZE;
         
         USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;
-        USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;    
+        USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;
       }
       else 
       {

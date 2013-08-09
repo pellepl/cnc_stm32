@@ -230,7 +230,6 @@ void USBWakeUp_IRQHandler(void)
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
   TRACE_IRQ_ENTER(17);
-  //print("usbistr\n");
   USB_Istr();
   TRACE_IRQ_EXIT(17);
 }

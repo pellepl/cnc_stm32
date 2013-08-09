@@ -66,6 +66,16 @@ void Enter_LowPowerMode(void)
 {
   /* Set the device state to suspend */
   bDeviceState = SUSPENDED;
+
+
+
+  // TODO PETER TEST
+  GPIO_InitTypeDef GPIO_InitStructure;
+  GPIO_InitStructure.GPIO_Pin = USB_DISCONNECT_PIN;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_OD;
+  GPIO_Init(USB_DISCONNECT, &GPIO_InitStructure);
+  //NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
 }
 
 /*******************************************************************************
@@ -89,6 +99,14 @@ void Leave_LowPowerMode(void)
     bDeviceState = ATTACHED;
   }
   /*Enable SystemCoreClock*/
+  // TODO PETER TEST
+  //NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
+  GPIO_InitTypeDef GPIO_InitStructure;
+  GPIO_InitStructure.GPIO_Pin = USB_DISCONNECT_PIN;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(USB_DISCONNECT, &GPIO_InitStructure);
+
   //SystemInit(); // TODO PETER - modification
 }
 
@@ -161,7 +179,7 @@ void Handle_USBAsynchXfer (void)
       USART_Rx_ptr_out = 0;
     }
     
-    if(USART_Rx_ptr_out == USART_Rx_ptr_in) 
+    if(USART_Rx_ptr_out == USART_Rx_ptr_in)
     {
       USB_Tx_State = 0; 
       return;
@@ -181,8 +199,8 @@ void Handle_USBAsynchXfer (void)
       USB_Tx_ptr = USART_Rx_ptr_out;
       USB_Tx_length = VIRTUAL_COM_PORT_DATA_SIZE;
       
-      USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;	
-      USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;	
+      USART_Rx_ptr_out += VIRTUAL_COM_PORT_DATA_SIZE;
+      USART_Rx_length -= VIRTUAL_COM_PORT_DATA_SIZE;
     }
     else
     {

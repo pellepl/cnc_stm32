@@ -32,7 +32,7 @@
 #include "usb_prop.h"
 #include "usb_desc.h"
 #include "usb_pwr.h"
-#include "hw_config.h"
+#include "usb_hw_config.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/

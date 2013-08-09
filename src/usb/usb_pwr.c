@@ -30,7 +30,7 @@
 #include "usb_lib.h"
 #include "usb_conf.h"
 #include "usb_pwr.h"
-#include "hw_config.h"
+#include "usb_hw_config.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -181,6 +181,7 @@ void Suspend(void)
 	/* enter system in STOP mode, only when wakeup flag in not set */
 	if((_GetISTR()&ISTR_WKUP)==0)
 	{
+    Enter_LowPowerMode();
 // TODO PETER   		__WFI();
 		/* Reset SLEEPDEEP bit of Cortex System Control Register */
 #if defined (STM32F30X) || defined (STM32F37X)
@@ -240,7 +241,6 @@ void Resume_Init(void)
 
   /* reverse suspend preparation */
   /* ... */ 
-
 }
 
 /*******************************************************************************
