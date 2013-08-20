@@ -7,11 +7,13 @@
 
 #include "i2c_dev.h"
 #include "miniutils.h"
+#include "taskq.h"
 
 #define I2C_DEV_BUS_USER_ARG_BUSY_BIT       (1<<0)
 
 static void i2c_dev_reset(i2c_dev *dev) {
   dev->bus->user_arg &= ~I2C_DEV_BUS_USER_ARG_BUSY_BIT;
+  TASK_stop_timer(&dev->tmo_tim);
 }
 
 static void i2c_dev_config(i2c_bus *bus, u32_t clock_config) {
@@ -73,6 +75,13 @@ static void i2c_dev_callback_irq(i2c_bus *bus, int res) {
   }
 }
 
+static void i2c_dev_tmo(u32_t ignore, void *dev_d) {
+  i2c_dev *dev = (i2c_dev*)dev_d;
+  DBG(D_I2C, D_DEBUG, "i2c_dev: timeout\n");
+  i2c_dev_finish(dev, I2C_ERR_DEV_TIMEOUT);
+  I2C_reset(dev->bus);
+}
+
 void I2C_DEV_init(i2c_dev *dev, u32_t clock, i2c_bus *bus, u8_t addr) {
   memset(dev, 0, sizeof(i2c_dev));
   dev->clock_configuration = clock;
@@ -99,6 +108,9 @@ int I2C_DEV_sequence(i2c_dev *dev, i2c_dev_sequence *seq, u8_t seq_len) {
   }
 
   dev->bus->user_arg |= I2C_DEV_BUS_USER_ARG_BUSY_BIT;
+
+  task *tmo = TASK_create(i2c_dev_tmo, 0);
+  TASK_start_timer(tmo, &dev->tmo_tim, 0, dev, 500, 0, "i2c_tmo");
 
   if (dev->bus->user_p == NULL || ((i2c_dev *)dev->bus->user_p)->clock_configuration != dev->clock_configuration) {
     // last bus use wasn't this device, so reconfigure

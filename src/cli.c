@@ -30,6 +30,7 @@
 #include "spiffs_wrapper.h"
 #include "i2c_driver.h"
 #include "i2c_dev.h"
+#include "eval.h"
 
 static u8_t in[256];
 
@@ -83,6 +84,8 @@ static int f_uconnect(int uart);
 static int f_uconf(int uart, int speed);
 
 static int f_rand();
+
+static int f_eval(char *in);
 
 static int f_reset();
 static int f_reset_boot();
@@ -1309,6 +1312,11 @@ static cmd c_tbl[] = {
     {.name = "rand",  .fn = (func)f_rand,
         .help = "Generates pseudo random sequence\n"
     },
+    {.name = "eval",  .fn = (func)f_eval,
+        .help = "Evaluates expression\n" \
+        "eval <expr>\n" \
+        "ex: eval \"(1+2)*3\"\n"
+    },
     {.name = "col",  .fn = (func)f_col,
         .help = "Set text color\n"
     },
@@ -1591,6 +1599,15 @@ static int f_comm_uart(int uart) {
 
 static int f_rand() {
   print("%08x\n", rand_next());
+  return 0;
+}
+
+static int f_eval(char *in) {
+  if (_argc != 1 || !IS_STRING(in)) {
+    return -1;
+  }
+  int res = eval(in);
+  print("result:%i (0x%08x)\n", res,res);
   return 0;
 }
 

@@ -118,13 +118,17 @@ bool I2C_is_busy(i2c_bus *bus) {
 }
 
 
+void I2C_reset(i2c_bus *bus) {
+  I2C_SoftwareResetCmd(bus->hw, ENABLE);
+  I2C_SoftwareResetCmd(bus->hw, DISABLE);
+  bus->state = I2C_S_IDLE;
+}
+
 
 static void i2c_error(i2c_bus *bus, int err, bool reset) {
   if (bus->state != I2C_S_IDLE) {
     if (reset) {
-      // todo
-      I2C_SoftwareResetCmd(bus->hw, ENABLE);
-      I2C_SoftwareResetCmd(bus->hw, DISABLE);
+      I2C_reset(bus);
       I2C_GenerateSTOP(bus->hw, ENABLE);
       I2C_ReceiveData(bus->hw);
     }

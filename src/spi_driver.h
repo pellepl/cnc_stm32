@@ -16,6 +16,7 @@
 #define SPI_OK                    0
 #define SPI_ERR_BUS_BUSY          -1
 #define SPI_ERR_BUS_LEN_EXCEEDED  -2
+#define SPI_ERR_BUS_PHY           -3
 
 /*
  * SPI bus
@@ -24,6 +25,8 @@ typedef struct spi_bus_s {
   SPI_TypeDef *hw;
   u32_t dma_rx_irq;
   u32_t dma_tx_irq;
+  u32_t dma_rx_err_irq;
+  u32_t dma_tx_err_irq;
   DMA_Channel_TypeDef *dma_rx_channel;
   DMA_Channel_TypeDef *dma_tx_channel;
   u8_t nvic_irq;
@@ -34,7 +37,7 @@ typedef struct spi_bus_s {
   u8_t dummy;
   u8_t *rx_buf;
   u16_t rx_len;
-  void (*spi_bus_callback)(struct spi_bus_s *s);
+  void (*spi_bus_callback)(struct spi_bus_s *s, s32_t res);
   void *user_p;
   volatile u32_t user_arg;
 } spi_bus;
@@ -72,7 +75,7 @@ int SPI_close(spi_bus *spi);
  * Called directly after bus is freed and finalized in irq context.
  * @return SPI_OK or SPI_ERR_BUSY if bus is currently busy
  */
-int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s));
+int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s, s32_t res));
 
 /**
  * A call to spi config will reset bus, configure it and then (re)start the

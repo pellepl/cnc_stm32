@@ -66,7 +66,7 @@ INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./$
 -I./${sourcedir}/usb
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2
 #-ffunction-sections -fdata-sections
-COMPILEROPTIONS += -O3
+COMPILEROPTIONS += -O2
 # -nostartfiles -nostdlib 
 ASSEMBLEROPTION = $(COMPILEROPTIONS)
 LINKERSCRIPT = arm.ld
@@ -126,7 +126,8 @@ FILES = 	processor.c \
 			enc28j60_spi_eth.c \
 			crc.c \
 			comm_proto_file.c \
-			spiffs_wrapper.c
+			spiffs_wrapper.c \
+			eval.c
 			
 # comm files
 include ${comm_dir}/files.mk

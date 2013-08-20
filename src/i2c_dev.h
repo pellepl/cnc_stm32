@@ -9,8 +9,10 @@
 #define I2C_DEV_H_
 
 #include "i2c_driver.h"
+#include "taskq.h"
 
 #define I2C_ERR_DEV_BUSY        -100
+#define I2C_ERR_DEV_TIMEOUT     -101
 
 #define I2C_SEQ_TX(buffer, length) \
   (i2c_dev_sequence){ \
@@ -63,6 +65,7 @@ typedef struct  {
 typedef struct i2c_dev_s {
   u32_t clock_configuration;
   i2c_bus *bus;
+  task_timer tmo_tim;
   bool opened;
   u8_t addr;
   void (*i2c_dev_callback)(struct i2c_dev_s *s, int result);

@@ -68,6 +68,8 @@ int I2C_close(i2c_bus *bus);
 
 bool I2C_is_busy(i2c_bus *bus);
 
+void I2C_reset(i2c_bus *bus);
+
 void I2C_IRQ_err(i2c_bus *bus);
 
 void I2C_IRQ_ev(i2c_bus *bus);

@@ -153,28 +153,36 @@ static void SPI_DEV_task_f_next(u32_t res, void *spi_dev_v) {
   spi_dev *dev = (spi_dev*)spi_dev_v;
   // if not doing all in irq, use task to exec next spi step
   // disable spi irqs while processing next spi step
-  SPI_disable_irq(dev->bus);
+  //SPI_disable_irq(dev->bus);
 
-  SPI_DEV_exec(dev);
+  if (res == SPI_OK) {
+    SPI_DEV_exec(dev);
+  } else {
+    SPI_DEV_finish(dev, res);
+  }
 
   // reenable spi irqs after processed next spi step
-  SPI_enable_irq(dev->bus);
+  //SPI_enable_irq(dev->bus);
 }
 
 // Spi device irq callback
-static void SPI_DEV_callback_irq(spi_bus *spi) {
+static void SPI_DEV_callback_irq(spi_bus *spi, s32_t res) {
   ASSERT(spi != NULL);
   spi_dev *dev = (spi_dev *)spi->user_p;
   ASSERT(dev != NULL);
   if (dev->irq_conf & SPI_CONF_IRQ_DRIVEN) {
     // if doing all in irq, use irq context to exec next spi step
-    SPI_DEV_exec(dev);
+    if (res == SPI_OK) {
+      SPI_DEV_exec(dev);
+    } else {
+      SPI_DEV_finish(dev, res);
+    }
   } else {
     // if not doing all in irq, start our task to execute next spi step in task context
     if (dev->spi_dev_callback) {
       task *t = TASK_create(SPI_DEV_task_f_next, 0);
       ASSERT(t != NULL);
-      TASK_run(t, 0, dev);
+      TASK_run(t, res, dev);
     }
   }
 }

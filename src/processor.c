@@ -368,11 +368,10 @@ static void SPI_config() {
   DMA_Init(SPI1_MASTER_Tx_DMA_Channel, &DMA_InitStructure);
 
   /* Enable DMA SPI RX channel transfer complete interrupt */
-  DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
-  /* Enable DMA SPI TX channel transfer complete interrupt */
-  // Do not do this, always use tx/rx transfers
-  // and only await DMA RX finished irq
-  //DMA_ITConfig(SPI_MASTER_Tx_DMA_Channel, DMA_IT_TC, ENABLE);
+  DMA_ITConfig(SPI1_MASTER_Rx_DMA_Channel, DMA_IT_TC | DMA_IT_TE, ENABLE);
+  // Do not enable DMA SPI TX channel transfer complete interrupt,
+  // always use tx/rx transfers and only await DMA RX finished irq
+  DMA_ITConfig(SPI1_MASTER_Tx_DMA_Channel, DMA_IT_TE, ENABLE);
 
   /* Enable SPI_MASTER DMA Rx/Tx request */
   SPI_I2S_DMACmd(SPI1_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , ENABLE);
@@ -425,11 +424,10 @@ static void SPI_config() {
   DMA_Init(SPI2_MASTER_Tx_DMA_Channel, &DMA_InitStructure);
 
   /* Enable DMA SPI RX channel transfer complete interrupt */
-  DMA_ITConfig(SPI2_MASTER_Rx_DMA_Channel, DMA_IT_TC, ENABLE);
-  /* Enable DMA SPI TX channel transfer complete interrupt */
-  // Do not do this, always use tx/rx transfers, shred tx buffer
-  // and only await DMA RX finished irq
-  //DMA_ITConfig(SPI2_MASTER_Tx_DMA_Channel, DMA_IT_TC, ENABLE);
+  DMA_ITConfig(SPI2_MASTER_Rx_DMA_Channel, DMA_IT_TC | DMA_IT_TE, ENABLE);
+  // Do not enable DMA SPI TX channel transfer complete interrupt,
+  // always use tx/rx transfers and only await DMA RX finished irq
+  DMA_ITConfig(SPI2_MASTER_Tx_DMA_Channel, DMA_IT_TE, ENABLE);
 
   /* Enable SPI_MASTER DMA Rx/Tx request */
   SPI_I2S_DMACmd(SPI2_MASTER, SPI_I2S_DMAReq_Rx | SPI_I2S_DMAReq_Tx , ENABLE);

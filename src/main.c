@@ -24,6 +24,7 @@
 #include "enc28j60_spi_eth.h"
 #include "spiffs_wrapper.h"
 #include "i2c_driver.h"
+#include "eval.h"
 
 os_thread kernel_thread;
 
@@ -245,6 +246,8 @@ int main(void) {
   #define KERNEL_STACK_EXTRA 0x800
 
   print("Main thread stack size: %i bytes\n", __get_MSP() - (u32_t)(STACK_START) - KERNEL_STACK_EXTRA);
+
+  eval_init();
 
   CLI_init();
 

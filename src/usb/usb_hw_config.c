@@ -43,7 +43,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 ErrorStatus HSEStartUpStatus;
-uint8_t  USART_Rx_Buffer [USART_RX_DATA_SIZE];
+uint8_t  USART_Rx_Buffer[USART_RX_DATA_SIZE];
 ringbuf usart_rx_rb;
 
 uint8_t  USB_Tx_State = 0;

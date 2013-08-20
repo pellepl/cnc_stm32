@@ -257,6 +257,10 @@ void itoan(int v, char* dst, int base, int num) {
   }
 }
 
+int atoi(const char* s) {
+  return atoin(s, 10, strlen(s));
+}
+
 int atoin(const char* s, int base, int len) {
   int val = 0;
   char negate = FALSE;

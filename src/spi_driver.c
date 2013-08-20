@@ -33,7 +33,7 @@ static void SPI_finalize(spi_bus *s) {
 }
 
 // IRQ: Finishes off an rx/tx operation, copies data and callbacks
-static void SPI_finish(spi_bus *s) {
+static void SPI_finish(spi_bus *s, s32_t err) {
   if (s->busy) { // check should not be needed, but..
     if (s->rx_buf) {
       memcpy(s->rx_buf, s->buf, s->rx_len);
@@ -41,7 +41,7 @@ static void SPI_finish(spi_bus *s) {
     SPI_finalize(s);
     s->busy = FALSE;
     if (s->spi_bus_callback) {
-      s->spi_bus_callback(s);
+      s->spi_bus_callback(s, err);
     }
   }
 }
@@ -95,7 +95,7 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
     (void)SPI_I2S_ReceiveData(s->hw);
   }
   DBG(D_SPI, D_DEBUG, " -- SPI tx:%04x rx:%04x\n", tx_ix, rx_ix);
-  SPI_finish(s);
+  SPI_finish(s, SPI_OK);
 #else
 
   // .. here be dragons...
@@ -124,11 +124,9 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
   // set up rx channel
   if (rx_len == 0) {
     // only sending, but receive ignored data to get irq when all is rxed
-    u32_t rx_addr = (u32_t)&s->dummy;
-    //u32_t rx_addr = (u32_t)&s->buf[0];
     s->dma_rx_channel->CCR &= ~DMA_MemoryInc_Enable;
     s->dma_rx_channel->CNDTR = tx_len;
-    s->dma_rx_channel->CMAR = rx_addr;
+    s->dma_rx_channel->CMAR = (u32_t)&s->dummy;
   } else {
     s->dma_rx_channel->CCR |= DMA_MemoryInc_Enable;
     s->dma_rx_channel->CNDTR = rx_len;
@@ -252,7 +250,7 @@ int SPI_rxtx(spi_bus *s, u8_t *tx, u16_t tx_len, u8_t *rx, u16_t rx_len) {
   return SPI_OK;
 }
 
-int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s)) {
+int SPI_set_callback(spi_bus *spi, void (*spi_bus_callback)(spi_bus *s, s32_t res)) {
   if (spi->busy) {
     return SPI_ERR_BUS_BUSY;
   }
@@ -264,21 +262,28 @@ void SPI_init() {
   // setup spi bus descriptor
   memset(__spi_bus_vec, 0, sizeof(__spi_bus_vec));
 
+#if SPI_MAX_ID >= 1
   _SPI_BUS(0)->max_buf_len = SPI_BUFFER;
   _SPI_BUS(0)->hw = SPI1_MASTER;
   _SPI_BUS(0)->dma_rx_irq = DMA1_IT_TC2;
   _SPI_BUS(0)->dma_tx_irq = DMA1_IT_TC3;
+  _SPI_BUS(0)->dma_rx_err_irq = DMA1_IT_TE2;
+  _SPI_BUS(0)->dma_tx_err_irq = DMA1_IT_TE3;
   _SPI_BUS(0)->dma_rx_channel = SPI1_MASTER_Rx_DMA_Channel;
   _SPI_BUS(0)->dma_tx_channel = SPI1_MASTER_Tx_DMA_Channel;
   _SPI_BUS(0)->nvic_irq = SPI1_MASTER_Rx_IRQ_Channel;
-
+#endif
+#if SPI_MAX_ID >= 2
   _SPI_BUS(1)->max_buf_len = SPI_BUFFER;
   _SPI_BUS(1)->hw = SPI2_MASTER;
   _SPI_BUS(1)->dma_rx_irq = DMA1_IT_TC4;
   _SPI_BUS(1)->dma_tx_irq = DMA1_IT_TC5;
+  _SPI_BUS(1)->dma_rx_err_irq = DMA1_IT_TE4;
+  _SPI_BUS(1)->dma_tx_err_irq = DMA1_IT_TE5;
   _SPI_BUS(1)->dma_rx_channel = SPI2_MASTER_Rx_DMA_Channel;
   _SPI_BUS(1)->dma_tx_channel = SPI2_MASTER_Tx_DMA_Channel;
   _SPI_BUS(1)->nvic_irq = SPI2_MASTER_Rx_IRQ_Channel;
+#endif
 }
 
 bool SPI_is_busy(spi_bus *spi) {
@@ -327,10 +332,20 @@ void SPI_irq(spi_bus *s) {
   }
 #endif
 
+  if (DMA_GetITStatus(s->dma_rx_err_irq)) {
+    // RX
+    DMA_ClearITPendingBit(s->dma_rx_err_irq);
+    SPI_finish(s, SPI_ERR_BUS_PHY);
+  }
+  if (DMA_GetITStatus(s->dma_tx_err_irq)) {
+    // TX
+    DMA_ClearITPendingBit(s->dma_tx_err_irq);
+    SPI_finish(s, SPI_ERR_BUS_PHY);
+  }
   if (DMA_GetITStatus(s->dma_rx_irq)) {
     // RX
     DMA_ClearITPendingBit(s->dma_rx_irq);
-    SPI_finish(s);
+    SPI_finish(s, SPI_OK);
   }
 }
 
