@@ -278,6 +278,8 @@ static void spi_flash_task_f(u32_t res_u, void *sfd_v) {
     if (sfd->open) {
       SPI_DEV_close(&sfd->dev);
       spi_flash_finalize(sfd, res);
+      TASK_stop_timer(&sfd->timer);
+      TASK_free(sfd->task);
       sfd->open = FALSE;
     }
   break;
@@ -291,6 +293,8 @@ static void spi_flash_task_f(u32_t res_u, void *sfd_v) {
     if (sfd->open) {
       SPI_DEV_close(&sfd->dev);
       spi_flash_finalize(sfd, res);
+      TASK_stop_timer(&sfd->timer);
+      TASK_free(sfd->task);
       sfd->open = FALSE;
     }
     break;
@@ -351,6 +355,9 @@ int SPI_FLASH_close_force(spi_flash_dev *sfd) {
   SPI_DEV_close(&sfd->dev);
   sfd->state = SPI_FLASH_STATE_CLOSED;
   spi_flash_finalize(sfd, SPI_OK);
+  TASK_stop_timer(&sfd->timer);
+  TASK_free(sfd->task);
+
   return SPI_OK;
 }
 

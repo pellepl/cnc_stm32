@@ -265,6 +265,13 @@ void TASK_wait() {
   }
 }
 
+void TASK_free(task *t) {
+  __os_enter_critical_kernel();
+  task_pool.mask[t->_ix/32] |= (1<<(t->_ix & 0x1f));
+  t->flags &= ~(TASK_RUN | TASK_STATIC);
+  __os_exit_critical_kernel();
+}
+
 u32_t TASK_tick() {
   __os_enter_critical_kernel();
   task* t = task_sys.head;

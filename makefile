@@ -108,6 +108,7 @@ FILES = 	processor.c \
 			spi_dev_os_generic.c \
 			i2c_driver.c \
 			i2c_dev.c \
+			lsm303_driver.c \
 			timer.c \
 			adc.c \
 			cnc_control.c \
@@ -117,6 +118,7 @@ FILES = 	processor.c \
 			comm_proto_sys.c \
 			comm_proto_cnc.c \
 			miniutils.c \
+			trig_q.c \
 			ringbuf.c \
 			taskq.c \
 			heap.c \

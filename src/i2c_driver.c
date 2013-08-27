@@ -48,21 +48,25 @@ int I2C_rx(i2c_bus *bus, u8_t addr, u8_t *rx, u16_t len, bool gen_stop) {
   bus->len = len;
   bus->addr = addr & 0xfe;
   bus->gen_stop = gen_stop;
+  I2C_ITConfig(I2C1_PORT, I2C_IT_ERR | I2C_IT_BUF | I2C_IT_EVT, ENABLE);
+  I2C_Cmd(I2C1_PORT, ENABLE);
   I2C_AcknowledgeConfig(bus->hw, len > 1 ? ENABLE : DISABLE);
   I2C_GenerateSTOP(bus->hw, DISABLE);
   I2C_GenerateSTART(bus->hw, ENABLE);
   return I2C_OK;
 }
 
-int I2C_tx(i2c_bus *bus, u8_t addr, u8_t *tx, u16_t len, bool gen_stop) {
+int I2C_tx(i2c_bus *bus, u8_t addr, const u8_t *tx, u16_t len, bool gen_stop) {
   if (bus->state != I2C_S_IDLE) {
     return I2C_ERR_BUS_BUSY;
   }
   bus->state = I2C_S_GEN_START;
-  bus->buf = tx;
+  bus->buf = (u8_t*)tx;
   bus->len = len;
   bus->addr = addr | 0x01;
   bus->gen_stop = gen_stop;
+  I2C_ITConfig(I2C1_PORT, I2C_IT_ERR | I2C_IT_BUF | I2C_IT_EVT, ENABLE);
+  I2C_Cmd(I2C1_PORT, ENABLE);
   I2C_GenerateSTOP(bus->hw, DISABLE);
   I2C_GenerateSTART(bus->hw, ENABLE);
   return I2C_OK;
@@ -77,6 +81,8 @@ int I2C_query(i2c_bus *bus, u8_t addr) {
   bus->len = 0;
   bus->addr = addr | 0x01;
   bus->gen_stop = TRUE;
+  I2C_ITConfig(I2C1_PORT, I2C_IT_ERR | I2C_IT_BUF | I2C_IT_EVT, ENABLE);
+  I2C_Cmd(I2C1_PORT, ENABLE);
   I2C_GenerateSTOP(bus->hw, DISABLE);
   I2C_GenerateSTART(bus->hw, ENABLE);
   return I2C_OK;
@@ -95,6 +101,7 @@ int I2C_close(i2c_bus *bus) {
   I2C_Cmd(bus->hw, DISABLE);
   bus->user_arg = 0;
   bus->user_p = 0;
+  bus->bad_ev_counter = 0;
   if (bus->state != I2C_S_IDLE) {
     bus->state = I2C_S_IDLE;
     return I2C_ERR_BUS_BUSY;
@@ -118,71 +125,95 @@ bool I2C_is_busy(i2c_bus *bus) {
 }
 
 
-void I2C_reset(i2c_bus *bus) {
-  I2C_SoftwareResetCmd(bus->hw, ENABLE);
-  I2C_SoftwareResetCmd(bus->hw, DISABLE);
+static void i2c_finalize(i2c_bus *bus) {
   bus->state = I2C_S_IDLE;
+  //I2C_ITConfig(I2C1_PORT, I2C_IT_ERR | I2C_IT_BUF | I2C_IT_EVT, DISABLE);
+  I2C_Cmd(bus->hw, DISABLE);
 }
 
+void I2C_reset(i2c_bus *bus) {
+  I2C_SoftwareResetCmd(bus->hw, ENABLE);
+  SYS_hardsleep_ms(2);
+  I2C_SoftwareResetCmd(bus->hw, DISABLE);
+  i2c_finalize(bus);
+}
 
 static void i2c_error(i2c_bus *bus, int err, bool reset) {
+  bus->bad_ev_counter = 0;
   if (bus->state != I2C_S_IDLE) {
     if (reset) {
-      I2C_reset(bus);
       I2C_GenerateSTOP(bus->hw, ENABLE);
       I2C_ReceiveData(bus->hw);
+      I2C_reset(bus);
     }
-    bus->state = I2C_S_IDLE;
+    i2c_finalize(bus);
+    I2C_ITConfig(I2C1_PORT, I2C_IT_ERR | I2C_IT_BUF | I2C_IT_EVT, DISABLE);
     if (bus->i2c_bus_callback) {
       bus->i2c_bus_callback(bus, err);
     }
   }
 }
 
+u32_t I2C_phy_err(i2c_bus *bus) {
+  return bus->phy_error;
+}
+
 void I2C_IRQ_err(i2c_bus *bus) {
+  bool err = FALSE;
+  bus->phy_error = 0;
   if (I2C_GetITStatus(bus->hw, I2C_IT_SMBALERT))
   {
     DBG(D_I2C, D_WARN, "i2c_err: SMBus Alert\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_SMBALERT);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_SMBUS_ALERT;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_TIMEOUT))
   {
     DBG(D_I2C, D_WARN, "i2c_err: Timeout or Tlow error\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_TIMEOUT);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_TIMEOUT;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_ARLO))
   {
     DBG(D_I2C, D_WARN, "i2c_err: Arbitration lost\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_ARLO);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_ARBITRATION_LOST;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_PECERR))
   {
     DBG(D_I2C, D_WARN, "i2c_err: PEC error\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_PECERR);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_PEC_ERR;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_OVR))
   {
     DBG(D_I2C, D_WARN, "i2c_err: Overrun/Underrun flag\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_OVR);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_OVER_UNDERRUN;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_AF))
   {
     DBG(D_I2C, D_WARN, "i2c_err: Acknowledge failure\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_AF);
-    i2c_error(bus, I2C_ERR_PHY, FALSE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_ACK_FAIL;
+    err = TRUE;
   }
   if (I2C_GetITStatus(bus->hw, I2C_IT_BERR))
   {
     DBG(D_I2C, D_WARN, "i2c_err: Bus error\n");
     I2C_ClearITPendingBit(bus->hw, I2C_IT_BERR);
-    i2c_error(bus, I2C_ERR_PHY, TRUE);
+    bus->phy_error |= 1<<I2C_ERR_PHY_BUS_ERR;
+    err = TRUE;
   }
-  //I2C_GenerateSTOP(bus->hw, ENABLE);
+
+  if (err) {
+    i2c_error(bus, I2C_ERR_PHY, FALSE);
+  }
 }
 
 //#define I2C_HW_DEBUG(...) DBG(__VA_ARGS__)
@@ -199,10 +230,11 @@ void I2C_IRQ_ev(i2c_bus *bus) {
     I2C_HW_DEBUG(D_I2C, D_DEBUG, "i2c_ev:   master mode\n");
     I2C_Send7bitAddress(bus->hw, bus->addr,
         (bus->addr & 0x01 ? I2C_Direction_Transmitter : I2C_Direction_Receiver));
+    bus->bad_ev_counter = 0;
+  break;
 
   // ------- TX --------
 
-  break;
   // EV6
   // from send 7 bit address tx
   case I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED:
@@ -219,6 +251,7 @@ void I2C_IRQ_ev(i2c_bus *bus) {
         bus->i2c_bus_callback(bus, I2C_OK);
       }
     }
+    bus->bad_ev_counter = 0;
   break;
   // EV8
   // tx reg empty
@@ -228,6 +261,7 @@ void I2C_IRQ_ev(i2c_bus *bus) {
       I2C_SendData(bus->hw, *bus->buf++);
       bus->len--;
     }
+    bus->bad_ev_counter = 0;
   break;
   // EV8_2
   // tx reg transmitted, became empty
@@ -239,12 +273,13 @@ void I2C_IRQ_ev(i2c_bus *bus) {
           I2C_GenerateSTOP(bus->hw, ENABLE);
         }
         bool gen_cb = bus->state != I2C_S_IDLE;
-        bus->state = I2C_S_IDLE;
+        i2c_finalize(bus);
         if (bus->i2c_bus_callback && gen_cb) {
           bus->i2c_bus_callback(bus, I2C_TX_OK);
         }
       }
     }
+    bus->bad_ev_counter = 0;
   break;
 
 
@@ -255,12 +290,13 @@ void I2C_IRQ_ev(i2c_bus *bus) {
   case I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED:
     I2C_HW_DEBUG(D_I2C, D_DEBUG, "i2c_ev:   master rx mode\n");
     bus->state = I2C_S_RX;
-  if (bus->len <= 1) {
+    if (bus->len <= 1) {
       if (bus->gen_stop) {
         I2C_GenerateSTOP(bus->hw, ENABLE);
       }
       I2C_AcknowledgeConfig(bus->hw, DISABLE);
     }
+    bus->bad_ev_counter = 0;
   break;
   // EV7
   // rx reg filled
@@ -275,21 +311,25 @@ void I2C_IRQ_ev(i2c_bus *bus) {
       }
       I2C_AcknowledgeConfig(bus->hw, DISABLE);
       bool gen_cb = bus->state != I2C_S_IDLE;
-      bus->state = I2C_S_IDLE;
+      i2c_finalize(bus);
       if (bus->i2c_bus_callback && gen_cb) {
         bus->i2c_bus_callback(bus, I2C_RX_OK);
       }
     }
+    bus->bad_ev_counter = 0;
     break;
   case 0x30000:
     // why oh why stm..?
+    bus->bad_ev_counter = 0;
     break;
 
   default:
     // bad event
     DBG(D_I2C, D_WARN, "i2c_err: bad event %08x\n", ev);
-    i2c_error(bus, I2C_ERR_UNKNOWN_STATE, TRUE);
-
+    bus->bad_ev_counter++;
+    if (bus->bad_ev_counter > 4) {
+      i2c_error(bus, I2C_ERR_UNKNOWN_STATE, TRUE);
+    }
     break;
   }
 }

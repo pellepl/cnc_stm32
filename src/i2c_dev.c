@@ -29,7 +29,7 @@ static void i2c_dev_finish(i2c_dev *dev, int res) {
   }
 }
 
-static void i2c_dev_exec(i2c_dev *dev) {
+void i2c_dev_exec(i2c_dev *dev) {
   ASSERT(dev != NULL);
 
   dev->bus->user_p = dev;
@@ -38,7 +38,8 @@ static void i2c_dev_exec(i2c_dev *dev) {
     memcpy(&dev->cur_seq, dev->seq_list, sizeof(i2c_dev_sequence));
     dev->seq_len--;
     dev->seq_list++;
-    DBG(D_I2C, D_DEBUG, "i2c_dev: running seq %s, len %i, addr:%08x, gen_stop:%i\n",
+    DBG(D_I2C, D_DEBUG, "i2c_dev: addr %02x %s len %i addr:%08x gen_stop:%i\n",
+        dev->addr,
         dev->cur_seq.dir ? "TX" : "RX",
             dev->cur_seq.len,
             dev->cur_seq.buf,
@@ -91,15 +92,24 @@ void I2C_DEV_init(i2c_dev *dev, u32_t clock, i2c_bus *bus, u8_t addr) {
   I2C_set_callback(dev->bus, i2c_dev_callback_irq);
 }
 
+void I2C_DEV_set_user_data(i2c_dev *dev, volatile void *user_data) {
+  dev->user_data = user_data;
+}
+
+volatile void *I2C_DEV_get_user_data(i2c_dev *dev) {
+  return dev->user_data;
+}
+
 void I2C_DEV_open(i2c_dev *dev) {
   if (!dev->opened) {
     I2C_register(dev->bus);
     i2c_dev_reset(dev);
+    dev->tmo_task = TASK_create(i2c_dev_tmo, 0);
     dev->opened = TRUE;
   }
 }
 
-int I2C_DEV_sequence(i2c_dev *dev, i2c_dev_sequence *seq, u8_t seq_len) {
+int I2C_DEV_sequence(i2c_dev *dev, const i2c_dev_sequence *seq, u8_t seq_len) {
   if (dev->bus->state != I2C_S_IDLE) {
     return I2C_ERR_BUS_BUSY;
   }
@@ -109,8 +119,7 @@ int I2C_DEV_sequence(i2c_dev *dev, i2c_dev_sequence *seq, u8_t seq_len) {
 
   dev->bus->user_arg |= I2C_DEV_BUS_USER_ARG_BUSY_BIT;
 
-  task *tmo = TASK_create(i2c_dev_tmo, 0);
-  TASK_start_timer(tmo, &dev->tmo_tim, 0, dev, 500, 0, "i2c_tmo");
+  TASK_start_timer(dev->tmo_task, &dev->tmo_tim, 0, dev, 500, 0, "i2c_tmo");
 
   if (dev->bus->user_p == NULL || ((i2c_dev *)dev->bus->user_p)->clock_configuration != dev->clock_configuration) {
     // last bus use wasn't this device, so reconfigure
@@ -142,6 +151,7 @@ void I2C_DEV_close(i2c_dev *dev) {
   if (dev->opened) {
     i2c_dev_reset(dev);
     I2C_release(dev->bus);
+    TASK_free(dev->tmo_task);
     dev->opened = FALSE;
   }
 }

@@ -30,6 +30,7 @@ static void SPI_finalize(spi_bus *s) {
   DMA_Cmd(s->dma_tx_channel, DISABLE);
   DMA_Cmd(s->dma_rx_channel, DISABLE);
 #endif
+  SPI_Cmd(s->hw, DISABLE);
 }
 
 // IRQ: Finishes off an rx/tx operation, copies data and callbacks
@@ -100,6 +101,8 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
 
   // .. here be dragons...
   // seems to be a compiler thing - adding compile breaks
+  DMA_Cmd(s->dma_rx_channel, DISABLE);
+  DMA_Cmd(s->dma_tx_channel, DISABLE);
 
   __NOP();
 
@@ -140,6 +143,7 @@ static void SPI_begin(spi_bus *s, u16_t tx_len, u8_t *tx, u16_t rx_len, u8_t *rx
 
   DMA_Cmd(s->dma_rx_channel, ENABLE);
   DMA_Cmd(s->dma_tx_channel, ENABLE);
+  SPI_Cmd(s->hw, ENABLE);
 
 #endif // CONFIG_SPI_POLL
 }
@@ -198,7 +202,6 @@ int SPI_config(spi_bus *s, u16_t config) {
   }
   SPI_InitStructure.SPI_CRCPolynomial = 7;
   SPI_Init(s->hw, &SPI_InitStructure);
-  SPI_Cmd(s->hw, ENABLE);
 
   return SPI_OK;
 }

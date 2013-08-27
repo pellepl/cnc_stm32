@@ -31,6 +31,7 @@
 #include "i2c_driver.h"
 #include "i2c_dev.h"
 #include "eval.h"
+#include "lsm303_driver.h"
 
 static u8_t in[256];
 
@@ -335,6 +336,146 @@ static int f_spiffs_vis() {
 #endif
 
 #ifdef CONFIG_I2C
+
+static lsm303_dev lsm_dev;
+static int lsm_op = 0;
+static int lsm_still = 0;
+static int lsm_readings = 0;
+static s16_t lsm_last_mag[3];
+static s16_t lsm_mag_min[3];
+static s16_t lsm_mag_max[3];
+
+static void lsm_cb(lsm303_dev *dev, int res) {
+  s16_t *mag = lsm_get_mag_reading(&lsm_dev);
+  s16_t *acc = lsm_get_acc_reading(&lsm_dev);
+  switch (lsm_op) {
+  case 0: // open
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm opened\n");
+    }
+    break;
+  case 1: // readacc
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm acc %04x %04x %04x\n", acc[0], acc[1], acc[2]);
+    }
+    break;
+  case 2: // readmag
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm mag %04x %04x %04x\n", mag[0], mag[1], mag[2]);
+    }
+    break;
+  case 3: // read both
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm acc %04x %04x %04x, mag %04x %04x %04x\n", acc[0], acc[1], acc[2], mag[0], mag[1], mag[2]);
+      u16_t heading = lsm_get_heading(&lsm_dev);
+      print("heading: %04x, %i\n", heading, (heading * 360) >> 16);
+    }
+    break;
+  case 4: // calibrate
+    lsm_readings++;
+    if (res == I2C_OK) {
+      if (ABS(lsm_last_mag[0] - mag[0]) < 32 &&
+          ABS(lsm_last_mag[1] - mag[1]) < 32 &&
+          ABS(lsm_last_mag[2] - mag[2]) < 32) {
+        lsm_still++;
+        if (lsm_still > 100) {
+          print("Calibration finished.\n");
+          print("%i < x < %i\n", lsm_mag_min[0], lsm_mag_max[0]);
+          print("%i < y < %i\n", lsm_mag_min[1], lsm_mag_max[1]);
+          print("%i < z < %i\n", lsm_mag_min[2], lsm_mag_max[2]);
+          lsm_op = -1;
+        }
+      } else {
+        lsm_still = 0;
+        int i;
+        for (i = 0; i < 3; i++) {
+          lsm_mag_min[i] = MIN(lsm_mag_min[i], mag[i]);
+          lsm_mag_max[i] = MAX(lsm_mag_max[i], mag[i]);
+        }
+      }
+      memcpy(lsm_last_mag, mag, sizeof(lsm_last_mag));
+    } else if (res == I2C_ERR_DEV_TIMEOUT) {
+      print("lsm calib error %i\n", res);
+      break;
+    }
+    if (lsm_op == 4) {
+      if ((lsm_readings & 0x3f) == 0 && lsm_readings > 0) {
+        print("%i, still:%i, ", lsm_readings, lsm_still);
+        print("%i < x < %i, ", lsm_mag_min[0], lsm_mag_max[0]);
+        print("%i < y < %i, ", lsm_mag_min[1], lsm_mag_max[1]);
+        print("%i < z < %i\n", lsm_mag_min[2], lsm_mag_max[2]);
+      }
+      SYS_hardsleep_ms(50);
+      (void)lsm_read_mag(&lsm_dev);
+    }
+    break;
+  }
+}
+
+static int f_lsm_open() {
+   lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, lsm_cb);
+   lsm_op = 0;
+   int res = lsm_config_default(&lsm_dev);
+   if (res != I2C_OK) {
+     print("err: %i\n", res);
+   }
+   return 0;
+}
+static int f_lsm_readacc() {
+  lsm_op = 1;
+  int res = lsm_read_acc(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_readmag() {
+  lsm_op = 2;
+  int res = lsm_read_mag(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_read() {
+  lsm_op = 3;
+  int res = lsm_read_both(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_calibrate() {
+  print("Move device around all axes slowly, put it to rest when finished\n");
+  lsm_op = 4;
+  lsm_still = 0;
+  lsm_readings = 0;
+  lsm_mag_min[0] = 0x7fff;
+  lsm_mag_min[1] = 0x7fff;
+  lsm_mag_min[2] = 0x7fff;
+  lsm_mag_max[0] = -0x7fff;
+  lsm_mag_max[1] = -0x7fff;
+  lsm_mag_max[2] = -0x7fff;
+  int res = lsm_read_mag(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+
+}
+static int f_lsm_close() {
+   lsm_close(&lsm_dev);
+   return 0;
+}
+
 
 static u8_t i2c_dev_reg = 0;
 static u8_t i2c_dev_val = 0;
@@ -1233,6 +1374,25 @@ static cmd c_tbl[] = {
     },
     {.name = "i2c_scan",     .fn = (func)f_i2c_scan,
         .help = "scans i2c bus for all addresses\n"
+    },
+
+    {.name = "lsm_open",     .fn = (func)f_lsm_open,
+        .help = "setups and configures lsm303 device\n"
+    },
+    {.name = "lsm_calib",     .fn = (func)f_lsm_calibrate,
+        .help = "calibrate lsm303 device\n"
+    },
+    {.name = "lsm_acc",     .fn = (func)f_lsm_readacc,
+        .help = "reads out lsm303 acceleration values\n"
+    },
+    {.name = "lsm_mag",     .fn = (func)f_lsm_readmag,
+        .help = "reads out lsm303 magneto values\n"
+    },
+    {.name = "lsm_read",     .fn = (func)f_lsm_read,
+        .help = "reads out lsm303 values\n"
+    },
+    {.name = "lsm_close",     .fn = (func)f_lsm_close,
+        .help = "closes lsm303 device\n"
     },
 
 #endif

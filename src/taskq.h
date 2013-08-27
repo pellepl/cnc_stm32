@@ -103,6 +103,12 @@ void TASK_set_timer_recurrence(task_timer* timer, time recurrent_time);
  */
 void TASK_stop_timer(task_timer* timer);
 
+/**
+ * Frees a static task, or a task that has been inadvertedly constructed and must
+ * never run.
+ */
+void TASK_free(task *t);
+
 u32_t TASK_tick();
 void TASK_wait();
 void TASK_timer();
