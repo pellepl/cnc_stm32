@@ -7,7 +7,7 @@
 
 #include "system.h"
 #include "miniutils.h"
-#include "uart.h"
+#include "uart_driver.h"
 #include "cnc_control.h"
 #include "os.h"
 

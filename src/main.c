@@ -1,6 +1,6 @@
 #include "stm32f10x.h"
 #include "system.h"
-#include "uart.h"
+#include "uart_driver.h"
 #include "timer.h"
 #include "comm_proto_sys.h"
 #include "comm_proto_cnc.h"

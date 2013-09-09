@@ -6,7 +6,7 @@
  */
 
 #include "cli.h"
-#include "uart.h"
+#include "uart_driver.h"
 #include "taskq.h"
 #include "miniutils.h"
 #include "system.h"
@@ -32,8 +32,7 @@
 #include "i2c_dev.h"
 #include "eval.h"
 #include "lsm303_driver.h"
-
-static u8_t in[256];
+#include "usr_wifi232_driver.h"
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= in && (u8_t*)(s) < in + sizeof(in))
@@ -50,10 +49,14 @@ struct {
   uart_rx_callback prev_uart_rx_f;
   void *prev_uart_arg;
   uart *uart_pipe;
-  u8_t uart_pipe_plusses;
+  u8_t uart_pipe_stars;
   char uart_pipe_via;
 } cli_state;
 
+static u8_t in[256];
+
+static int _argc;
+static void *_args[16];
 
 #ifdef CONFIG_CNC
 static int f_cnc_status();
@@ -565,6 +568,124 @@ static int f_usb_cable(u8_t en) {
   return 0;
 }
 #endif
+
+#ifdef CONFIG_WIFI
+
+static union {
+  wifi_ap ap;
+  wifi_wan_setting wan;
+  char ssid[64];
+} wres;
+
+static void cli_wifi_cb(wifi_cfg_cmd cmd, int res, u32_t arg, void *data) {
+  if (res < WIFI_OK) {
+    print("wifi err:%i\n", res);
+    return;
+  }
+
+  switch (cmd) {
+  case WIFI_SCAN: {
+    if (res == WIFI_END_OF_SCAN) {
+      print("  end of scan\n");
+    } else {
+      wifi_ap *ap = (wifi_ap *)data;
+      print(
+          "  ch%i\t%s\t[%s]\t%i%%\t%s\n",
+          ap->channel,
+          ap->ssid,
+          ap->mac,
+          ap->signal,
+          ap->encryption);
+    }
+    break;
+  }
+  case WIFI_GET_WAN: {
+    wifi_wan_setting *wan = (wifi_wan_setting *)data;
+    print(
+        "  %s  ip:%i.%i.%i.%i  netmask %i.%i.%i.%i  gateway %i.%i.%i.%i\n",
+        wan->method == WIFI_WAN_STATIC ? "STATIC":"DHCP",
+        wan->ip[0], wan->ip[1], wan->ip[2], wan->ip[3],
+        wan->netmask[0], wan->netmask[1], wan->netmask[2], wan->netmask[3],
+        wan->gateway[0], wan->ip[1], wan->gateway[2], wan->gateway[3]);
+    break;
+  }
+  case WIFI_GET_SSID: {
+    char *ssid= (char *)data;
+    print("  %s\n", ssid);
+    break;
+  }
+  default:
+    break;
+  } // switch
+}
+
+static int f_wifi_init() {
+  WIFI_init(cli_wifi_cb);
+  return 0;
+}
+
+static int f_wifi_reset() {
+  WIFI_reset();
+  return 0;
+}
+
+static int f_wifi_factory() {
+  WIFI_factory_reset();
+  return 0;
+}
+
+static int f_wifi_status() {
+  WIFI_state();
+  return 0;
+}
+
+static int f_wifi_connect() {
+  UART_put_char(_UART(WIFI_UART), '+');
+  UART_put_char(_UART(WIFI_UART), '+');
+  UART_put_char(_UART(WIFI_UART), '+');
+  volatile u32_t spoon_guard = 0x10000;
+  while (--spoon_guard &&
+      (UART_rx_available(_UART(WIFI_UART)) == 0 ||
+      UART_get_char(_UART(WIFI_UART)) != 'a'));
+
+  if (spoon_guard == 0) {
+    print("no answer (1)\n");
+    return 0;
+  }
+
+  UART_put_char(_UART(WIFI_UART), 'a');
+  spoon_guard = 0x10000;
+  while (--spoon_guard && UART_rx_available(_UART(WIFI_UART)) < 3);
+
+  if (spoon_guard == 0) {
+    print("no answer (2)\n");
+    return 0;
+  }
+
+  _argc = 1;
+  return f_uconnect(WIFI_UART);
+}
+
+
+static int f_wifi_scan() {
+  int res = WIFI_scan(&wres.ap);
+  print("res: %i\n", res);
+  return 0;
+}
+
+static int f_wifi_get_wan() {
+  int res = WIFI_get_wan(&wres.wan);
+  print("res: %i\n", res);
+  return 0;
+}
+
+static int f_wifi_get_ssid() {
+  int res = WIFI_get_ssid(&wres.ssid[0]);
+  print("res: %i\n", res);
+  return 0;
+}
+
+#endif // CONFIG_WIFI
 
 #if 0
 #define USE_FSMC
@@ -1108,9 +1229,6 @@ static int f_test() {
 }
 #endif
 
-static int _argc;
-static void *_args[16];
-
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
 #define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
@@ -1260,7 +1378,7 @@ static cmd c_tbl[] = {
         "uconnect <uart> (-via)\n"\
         HELP_UART_DEFS \
         "-via - vias data to original channel\n"\
-        "Once connected, enter '+++' to disconnect\n"\
+        "Once connected, enter '***' to disconnect\n"\
         "ex: uconnect 2\n"
     },
     {.name = "uconf",  .fn = (func)f_uconf,
@@ -1453,7 +1571,35 @@ static cmd c_tbl[] = {
         .help = "Visualize spiffs contents\n"
     },
 #endif
-#endif
+#endif // CONFIG_SPIFFS
+
+#ifdef CONFIG_WIFI
+    {.name = "wifi_init",     .fn = (func)f_wifi_init,
+        .help = "Initializes wifi driver\n"
+    },
+    {.name = "wifi_reset",     .fn = (func)f_wifi_reset,
+        .help = "Resets wifi\n"
+    },
+    {.name = "wifi_factory",     .fn = (func)f_wifi_factory,
+        .help = "Sets wifi factory config\n"
+    },
+    {.name = "wifi_status",     .fn = (func)f_wifi_status,
+        .help = "Displays wifi status\n"
+    },
+    {.name = "wifi_scan",     .fn = (func)f_wifi_scan,
+        .help = "Scans wifi APs\n"
+    },
+    {.name = "wifi_get_wan",     .fn = (func)f_wifi_get_wan,
+        .help = "Queries wifi wan settings\n"
+    },
+    {.name = "wifi_get_ssid",     .fn = (func)f_wifi_get_ssid,
+        .help = "Queries wifi SSID AO\n"
+    },
+    {.name = "wifi_connect",     .fn = (func)f_wifi_connect,
+        .help = "Opens wifi uart\n"
+    },
+#endif // CONFIG_WIFI
+
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\
         "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"\
@@ -1924,6 +2070,33 @@ static int f_uread(int uart, int numchars) {
   return 0;
 }
 
+static int f_uconf(int uart, int speed) {
+  if (_argc != 2) {
+    return -1;
+  }
+  if (IS_STRING(uart) || IS_STRING(speed) || uart < 0 || uart >= CONFIG_UART_CNT) {
+    return -1;
+  }
+  USART_TypeDef *uart_hw = _UART(uart)->hw;
+
+  USART_Cmd(uart_hw, DISABLE);
+
+  USART_InitTypeDef USART_InitStructure;
+  USART_InitStructure.USART_BaudRate = speed;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No ;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+  /* Configure the USART */
+  USART_Init(uart_hw, &USART_InitStructure);
+
+  USART_Cmd(uart_hw, ENABLE);
+
+  return 0;
+}
+
 static int f_uconnect(int uart) {
   if (_argc < 1) {
     return -1;
@@ -1948,39 +2121,12 @@ static int f_uconnect(int uart) {
 
   cli_state.uart_pipe_via = via;
 
-  print("\nPiping uart %i, bash '+++' to exit\n", uart);
+  print("\nPiping uart %i, bash '***' to exit\n", uart);
 
   cli_state.uart_pipe = _UART(uart);
   UART_get_callback(_UART(uart),
       &cli_state.prev_uart_rx_f, &cli_state.prev_uart_arg);
-  UART_set_callback(_UART(uart),CLI_uart_pipe_irq,NULL);
-
-  return 0;
-}
-
-static int f_uconf(int uart, int speed) {
-  if (_argc != 2) {
-    return -1;
-  }
-  if (IS_STRING(uart) || IS_STRING(speed) || uart < 0 || uart >= CONFIG_UART_CNT) {
-    return -1;
-  }
-  USART_TypeDef *uart_hw = _UART(uart)->hw;
-
-  USART_Cmd(uart_hw, DISABLE);
-
-  USART_InitTypeDef USART_InitStructure;
-  USART_InitStructure.USART_BaudRate = speed;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART */
-  USART_Init(uart_hw, &USART_InitStructure);
-
-  USART_Cmd(uart_hw, ENABLE);
+  UART_set_callback(_UART(uart), CLI_uart_pipe_irq, NULL);
 
   return 0;
 }
@@ -2442,14 +2588,14 @@ static void CLI_TASK_on_piped_input(u32_t len, void *p) {
   u32_t rlen = UART_get_buf(_UART(STDIN), in, MIN(len, sizeof(in)));
   int i = 0;
   for (i = 0; i < rlen; i++) {
-    if (in[i] == '+') {
-      cli_state.uart_pipe_plusses++;
-      if (cli_state.uart_pipe_plusses > 2) {
+    if (in[i] == '*') {
+      cli_state.uart_pipe_stars++;
+      if (cli_state.uart_pipe_stars > 2) {
         f_udisconnect();
         return;
       }
     } else {
-      cli_state.uart_pipe_plusses = 0;
+      cli_state.uart_pipe_stars = 0;
     }
   }
   UART_put_buf(cli_state.uart_pipe, in, rlen);

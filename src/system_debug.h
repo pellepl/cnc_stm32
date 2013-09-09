@@ -41,6 +41,7 @@ do { \
   "eth", \
   "fs", \
   "i2c", \
+  "wifi", \
 }
 
 #ifdef DBG_SYS_OFF
@@ -103,6 +104,11 @@ do { \
 #else
 #define D_I2C     (1<<11)
 #endif
+#ifdef DBG_WIFI_OFF
+#define D_WIFI   0
+#else
+#define D_WIFI    (1<<12)
+#endif
 #ifdef DBG_ANY_OFF
 #define D_ANY     0
 #else
@@ -123,6 +129,7 @@ do { \
 #define D_ETH     0
 #define D_FS      0
 #define D_I2C     0
+#define D_WIFI    0
 #define D_ANY     0
 
 #endif  // DBG_OFF

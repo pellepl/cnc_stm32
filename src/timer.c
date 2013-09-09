@@ -9,7 +9,7 @@
 #include "system.h"
 #include "stm32f10x.h"
 #include "miniutils.h"
-#include "uart.h"
+#include "uart_driver.h"
 #include "cnc_control.h"
 #include "cli.h"
 #include "led.h"

@@ -31,12 +31,6 @@
 
 #define CONFIG_UART_CNT   4 // update according to enabled uarts
 
-// enable I2C driver
-#define CONFIG_I2C
-
-// enable SPI driver
-#define CONFIG_SPI
-
 // enable ENC28J60 ethernet spi driver
 #define CONFIG_ETHSPI
 #define UDP_client
@@ -269,7 +263,7 @@
 
 #define CONFIG_ADC
 
-/** USB CDC VIRTUAL SERIAL PORT */
+/** USB CDC VIRTUAL SERIAL PORT **/
 
 #define CONFIG_USB_CDC
 
@@ -280,6 +274,18 @@
 #define ID1                                 (0x1FFFF7E8)
 #define ID2                                 (0x1FFFF7EC)
 #define ID3                                 (0x1FFFF7F0)
+
+/** USR232 WIFI **/
+
+#define WIFI_GPIO_PORT        GPIOD
+#define WIFI_APBPeriph_GPIO   RCC_APB2Periph_GPIOD
+#define WIFI_GPIO_RESET_PIN   GPIO_Pin_0
+#define WIFI_GPIO_LINK_PIN    GPIO_Pin_1
+#define WIFI_GPIO_READY_PIN   GPIO_Pin_14
+#define WIFI_GPIO_RELOAD_PIN  GPIO_Pin_15
+#define WIFI_UART             SPLIN
+#define WIFI_UART_BAUD        57600
+
 
 /****************************************************/
 /******** Application build time configuration ******/
@@ -370,6 +376,10 @@
 /** FS **/
 
 #define CONFIG_SPIFFS
+
+/** WIFI **/
+
+#define CONFIG_WIFI
 
 /** DEBUG **/
 

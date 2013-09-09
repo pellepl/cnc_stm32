@@ -66,7 +66,7 @@ static int stack_empty(stack* s) {
 static unsigned int var_hash(const char *var_name, unsigned int len) {
   unsigned int h = 0;
   while (len--) {
-    h = 37 * h + (*var_name++);
+    h = (31 * h + (*var_name++)) ^ (h >> (32-5));
   }
   return h;
 }

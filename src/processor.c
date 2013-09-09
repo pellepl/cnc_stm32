@@ -587,6 +587,29 @@ static void I2C_config() {
 #endif
 }
 
+static void WIFI_config() {
+#ifdef CONFIG_WIFI
+  GPIO_InitTypeDef GPIO_InitStructure;
+
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+
+  GPIO_InitStructure.GPIO_Pin = WIFI_GPIO_RESET_PIN;
+  GPIO_Init(WIFI_GPIO_PORT, &GPIO_InitStructure);
+  GPIO_InitStructure.GPIO_Pin = WIFI_GPIO_RELOAD_PIN;
+  GPIO_Init(WIFI_GPIO_PORT, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+
+  GPIO_InitStructure.GPIO_Pin = WIFI_GPIO_READY_PIN;
+  GPIO_Init(WIFI_GPIO_PORT, &GPIO_InitStructure);
+  GPIO_InitStructure.GPIO_Pin = WIFI_GPIO_LINK_PIN;
+  GPIO_Init(WIFI_GPIO_PORT, &GPIO_InitStructure);
+
+  GPIO_set(WIFI_GPIO_PORT, WIFI_GPIO_RESET_PIN | WIFI_GPIO_RELOAD_PIN, 0);
+#endif
+}
+
 static void USB_CDC_config() {
 #ifdef CONFIG_USB_CDC
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -646,6 +669,7 @@ void PROC_periph_init() {
   CNC_config();
   ADC_config();
   I2C_config();
+  WIFI_config();
   USB_CDC_config();
   OS_DUMP_IRQ_config();
 }

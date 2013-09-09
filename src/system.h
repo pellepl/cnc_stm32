@@ -13,16 +13,6 @@
 #include "stm32f10x.h"
 #include "types.h"
 
-enum reboot_reason_e {
-  REBOOT_COLD_START = 0,
-  REBOOT_UNKONWN,
-  REBOOT_USER,
-  REBOOT_ASSERT,
-  REBOOT_CRASH,
-  REBOOT_EXEC_BOOTLOADER,
-  REBOOT_BOOTLOADER,
-};
-
 #include "shared_mem.h"
 
 /**
