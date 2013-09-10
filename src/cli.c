@@ -33,9 +33,10 @@
 #include "eval.h"
 #include "lsm303_driver.h"
 #include "usr_wifi232_driver.h"
+#include "usb_serial.h"
 
 #define CLI_PROMPT "> "
-#define IS_STRING(s) ((u8_t*)(s) >= in && (u8_t*)(s) < in + sizeof(in))
+#define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
 
 typedef int(*func)(int a, ...);
 
@@ -553,13 +554,13 @@ static int f_i2c_scan(void) {
 
 #ifdef CONFIG_USB_CDC
 static int f_usb_init(void) {
-  USB_Init();
+  usb_serial_init();
   return 0;
 }
 static int f_usb_tx(u8_t *buf) {
   u8_t d;
   while ((d = *buf++) != 0) {
-    USB_Transmit(d);
+    usb_serial_tx_char(d);
   }
   return 0;
 }
@@ -2105,7 +2106,7 @@ static int f_uconnect(int uart) {
     return -1;
   }
 
-  if (uart == STDIN) {
+  if (uart == UARTSTDIN) {
     print("Cannot pipe STDIN channel\n");
     return 0;
   }
@@ -2555,14 +2556,14 @@ static int f_dump() {
   print("\n");
   HEAP_dump();
   print("\n");
-  TASK_dump();
+  TASK_dump(IOSTD);
   print("\n");
 #ifdef CONFIG_ETHSPI
   ETH_SPI_dump();
   print("\n");
 #endif
 #if OS_DBG_MON
-  OS_DBG_dump();
+  OS_DBG_dump(IOSTD);
   print("\n");
 #endif
   print("=========\n");
@@ -2571,7 +2572,7 @@ static int f_dump() {
 
 static int f_dump_trace() {
 #ifdef DBG_TRACE_MON
-  SYS_dump_trace();
+  SYS_dump_trace(IOSTD);
 #else
   print("trace not enabled\n");
 #endif
@@ -2580,12 +2581,12 @@ static int f_dump_trace() {
 
 void CLI_TASK_on_piped_output(u32_t len, void *p) {
   while (UART_rx_available(cli_state.uart_pipe) > 0) {
-    UART_put_char(_UART(STDOUT), UART_get_char(cli_state.uart_pipe));
+    UART_put_char(_UART(UARTSTDOUT), UART_get_char(cli_state.uart_pipe));
   }
 }
 
 static void CLI_TASK_on_piped_input(u32_t len, void *p) {
-  u32_t rlen = UART_get_buf(_UART(STDIN), in, MIN(len, sizeof(in)));
+  u32_t rlen = UART_get_buf(_UART(UARTSTDIN), in, MIN(len, sizeof(in)));
   int i = 0;
   for (i = 0; i < rlen; i++) {
     if (in[i] == '*') {
@@ -2611,7 +2612,7 @@ void CLI_TASK_on_input(u32_t len, void *p) {
     print(CLI_PROMPT);
     return;
   }
-  u32_t rlen = UART_get_buf(_UART(STDIN), in, MIN(len, sizeof(in)));
+  u32_t rlen = UART_get_buf(_UART(UARTSTDIN), in, MIN(len, sizeof(in)));
   if (rlen != len) {
     DBG(D_CLI, D_WARN, "CONS length mismatch\n");
     print(CLI_PROMPT);
@@ -2675,14 +2676,13 @@ void CLI_TASK_on_input(u32_t len, void *p) {
   print(CLI_PROMPT);
 }
 
-
 void CLI_timer() {
 }
 
 void CLI_uart_check_char(void *a, u8_t c) {
   if (c == '\n') {
     task *t = TASK_create(CLI_TASK_on_input, 0);
-    TASK_run(t, UART_rx_available(_UART(STDIN)), NULL);
+    TASK_run(t, UART_rx_available(_UART(UARTSTDIN)), NULL);
   }
 }
 
@@ -2697,7 +2697,7 @@ void CLI_uart_pipe_irq(void *a, u8_t c) {
 void CLI_init() {
   memset(&cli_state, 0, sizeof(cli_state));
   DBG(D_CLI, D_DEBUG, "CLI init\n");
-  UART_set_callback(_UART(STDIN), CLI_uart_check_char, NULL);
+  UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
   print("\n"APP_NAME"\n");
   print("version   : %02x.%02x.%04x\n", (COMM_CNC_VERSION>>24), (COMM_CNC_VERSION>>16), COMM_CNC_VERSION & 0xffff);
   print("build     : %i\n", SYS_build_number());

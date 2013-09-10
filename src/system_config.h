@@ -8,6 +8,7 @@
 #ifndef SYSTEM_CONFIG_H_
 #define SYSTEM_CONFIG_H_
 
+#include "config_header.h"
 #include "types.h"
 #include "stm32f10x.h"
 
@@ -283,7 +284,7 @@
 #define WIFI_GPIO_LINK_PIN    GPIO_Pin_1
 #define WIFI_GPIO_READY_PIN   GPIO_Pin_14
 #define WIFI_GPIO_RELOAD_PIN  GPIO_Pin_15
-#define WIFI_UART             SPLIN
+#define WIFI_UART             UARTSPLIN
 #define WIFI_UART_BAUD        57600
 
 
@@ -311,20 +312,21 @@
 
 /** UART **/
 
-#define COMMIN      0
-#define COMMOUT     0
-#define STDIN       1
-#define STDOUT      1
-#define SPLIN       2
-#define SPLOUT      2
-#define BTIN        3
-#define BTOUT       3
+#define UARTCOMMIN      0
+#define UARTCOMMOUT     0
+#define UARTSTDIN       1
+#define UARTSTDOUT      1
+#define UARTSPLIN       2
+#define UARTSPLOUT      2
+#define UARTBTIN        3
+#define UARTBTOUT       3
+
 #define UART1_SPEED 115200
 #define UART2_SPEED 460800
 #define UART3_SPEED 115200
 #define UART4_SPEED 115200
 
-#define COMM_UART_LIST {COMMIN, BTIN}
+#define COMM_UART_LIST {UARTCOMMIN, UARTBTIN}
 #define COMM_UARTS  2
 
 #define USE_COLOR_CODING
@@ -335,6 +337,16 @@
 #define CONFIG_ETH_LINK_STATUS_AT_STARTUP
 // console output on connect/disconnect
 #define CONFIG_COMM_STATUS
+
+/** IO **/
+#define CONFIG_IO_MAX   4
+
+#define IOSTD        UARTSTDOUT
+#define IOCOMM       UARTCOMMOUT
+#define IOBT         UARTBTOUT
+#define IOSPL        UARTSPLOUT
+
+#define IODBG        IOSTD
 
 /** OS **/
 

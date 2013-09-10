@@ -2,5 +2,7 @@ build/
 *.o
 _stm32flash.script
 *.orig
-
+.cproject
+.settings
+.project
 /Default

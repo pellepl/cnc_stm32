@@ -181,8 +181,8 @@ void EXTI4_IRQHandler(void)
 void EXTI2_IRQHandler(void)
 {
   TRACE_IRQ_ENTER(11);
-  OS_DBG_dump_irq();
-  SYS_dump_trace();
+  OS_DBG_dump_irq(IODBG);
+  SYS_dump_trace(IODBG);
   TRACE_IRQ_EXIT(11);
 }
 #endif

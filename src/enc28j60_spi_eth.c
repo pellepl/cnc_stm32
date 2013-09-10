@@ -549,15 +549,15 @@ void ETH_SPI_dump() {
 #if OS_DBG_MON
   print("OS\n");
   print("  IRQ THREAD, MUTEX & COND\n");
-  OS_DBG_print_thread(&ethspi.irq_thread, TRUE, 2);
-  OS_DBG_print_mutex(&ethspi.irq_mutex, TRUE, 2);
-  OS_DBG_print_cond(&ethspi.irq_cond, TRUE, 2);
+  OS_DBG_print_thread(IOSTD, &ethspi.irq_thread, TRUE, 2);
+  OS_DBG_print_mutex(IOSTD, &ethspi.irq_mutex, TRUE, 2);
+  OS_DBG_print_cond(IOSTD, &ethspi.irq_cond, TRUE, 2);
   print("  TX MUTEX & COND\n");
-  OS_DBG_print_mutex(&ethspi.tx_mutex, TRUE, 2);
-  OS_DBG_print_cond(&ethspi.tx_cond, TRUE, 2);
+  OS_DBG_print_mutex(IOSTD, &ethspi.tx_mutex, TRUE, 2);
+  OS_DBG_print_cond(IOSTD, &ethspi.tx_cond, TRUE, 2);
   print("  RX MUTEX & COND\n");
-  OS_DBG_print_mutex(&ethspi.rx_mutex, TRUE, 2);
-  OS_DBG_print_cond(&ethspi.rx_cond, TRUE, 2);
+  OS_DBG_print_mutex(IOSTD, &ethspi.rx_mutex, TRUE, 2);
+  OS_DBG_print_cond(IOSTD, &ethspi.rx_cond, TRUE, 2);
 #endif
   print("HW\n");
   print("  chip rev:       %02x\n", enc28j60getrev());

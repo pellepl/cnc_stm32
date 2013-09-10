@@ -6,12 +6,9 @@ BINARY = cnc_stm32
 #
 ############
 
-FLAGS =  -DSTM32F10X_HD
-#FLAGS += -DUSE_FULL_ASSERT
 FLAGS += -DSYSCLK_FREQ_72MHz=72000000
+FLAGS += -DSTM32F10X_HD
 STARTUP = startup_stm32f10x_hd.s
-
-FLAGS += -DUSER_HARDFAULT=1
 
 ############
 #
@@ -27,16 +24,22 @@ basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
 #basetoolsdir = /usr/local/gcc/arm-elf-tools-4.6.3
 #/home/petera/toolchain/gcc/arm-elf-tools-4.6.2
 #codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.8.1/
+
+hfile = ${sourcedir}/config_header.h
+
 stmlibdir = STM32F10x_StdPeriph_Lib_V3.5.0/Libraries
 stmdriverdir = ${stmlibdir}/STM32F10x_StdPeriph_Driver
 stmcmsisdir = ${stmlibdir}/CMSIS/CM3/DeviceSupport/ST/STM32F10x
 stmcmsisdircore = ${stmlibdir}/CMSIS/CM3/CoreSupport
+
 tools = ${basetoolsdir}/bin
 
-comm_dir = ../generic/comm
-tinyheap_dir = ../generic/tinyheap
-enc28j60_dir = ../generic/enc28j60_stm32
-spiffs_dir = ../generic/spiffs
+CPATH =
+SPATH =
+INC =
+SFILES =
+CFILES =
+RFILES =
 
 #############
 #
@@ -61,9 +64,7 @@ MKDIR = mkdir -p
 #
 ###############
 
-INCLUDE_DIRECTIVES = -I./${sourcedir} -I./${codir} -I./${stmdriverdir}/inc -I./${stmcmsisdir} \
--I./${stmcmsisdircore} -I./${comm_dir}/src -I./${tinyheap_dir}/src -I./${enc28j60_dir}/src -I./${spiffs_dir}/src \
--I./${sourcedir}/usb
+INCLUDE_DIRECTIVES =
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2
 #-ffunction-sections -fdata-sections
 COMPILEROPTIONS += -O2
@@ -82,117 +83,91 @@ BUILD_NUMBER_FILE=build-number.txt
 #
 ###############
 
-SFILES = 	$(STARTUP) \
-			stm32f10x_it_h.s \
-			memcpy.s \
-			memset.s \
-			variadic.s \
-			sqrt.s \
-			svc_handler.s
-
 # app files
-FILES = 	processor.c \
-			shared_mem.c \
-			main.c \
-			bl_exec.c \
-			system.c \
-			led.c \
-			nvstorage.c \
-			config.c \
-			uart.c \
-			spi_driver.c \
-			spi_dev.c \
-			spi_flash.c \
-			spi_flash_m25p16.c \
-			spi_flash_os.c \
-			spi_dev_os_generic.c \
-			i2c_driver.c \
-			i2c_dev.c \
-			lsm303_driver.c \
-			timer.c \
-			adc.c \
-			cnc_control.c \
-			comm_impl.c \
-			comm_impl_uart.c \
-			comm_impl_udp.c \
-			comm_proto_sys.c \
-			comm_proto_cnc.c \
-			miniutils.c \
-			trig_q.c \
-			ringbuf.c \
-			taskq.c \
-			heap.c \
-			cli.c \
-			list.c \
-			os.c \
-			enc28j60_spi_eth.c \
-			crc.c \
-			comm_proto_file.c \
-			spiffs_wrapper.c \
-			eval.c
-			
+
+CPATH 		+= ${sourcedir}
+SPATH 		+= ${sourcedir}
+INC			+= -I./${sourcedir}
+
+SFILES 		+= stm32f10x_it_h.s
+
+CFILES 		+= main.c
+CFILES 		+= processor.c
+CFILES 		+= cnc_control.c
+CFILES 		+= system.c
+CFILES 		+= led.c
+CFILES 		+= nvstorage.c
+CFILES 		+= config.c
+CFILES 		+= timer.c
+CFILES 		+= adc.c
+CFILES 		+= cli.c
+CFILES 		+= eval.c
+CFILES 		+= comm_impl.c
+CFILES 		+= comm_impl_uart.c
+CFILES 		+= comm_impl_udp.c
+CFILES 		+= comm_proto_sys.c
+CFILES 		+= comm_proto_cnc.c
+CFILES 		+= enc28j60_spi_eth.c
+CFILES 		+= crc.c
+CFILES 		+= comm_proto_file.c
+CFILES 		+= spiffs_wrapper.c
+CFILES 		+= heap.c
+CFILES 		+= ringbuf.c
+
 # comm files
-include ${comm_dir}/files.mk
+include ../generic/comm/files.mk
 
 # tinyheap files
-include ${tinyheap_dir}/files.mk
+include ../generic/tinyheap/files.mk
 		
 # enc28j60 driver files
-include ${enc28j60_dir}/files.mk
+include ../generic/enc28j60_stm32/files.mk
 		
 # spiffs files
-include ${spiffs_dir}/files.mk
+include ../generic/spiffs/files.mk
 		
 # stm32 lib files
-FILES += 	misc.c \
-		stm32f10x_adc.c \
-		stm32f10x_bkp.c \
-		stm32f10x_can.c \
-		stm32f10x_cec.c \
-		stm32f10x_crc.c \
-		stm32f10x_dac.c \
-		stm32f10x_dbgmcu.c \
-		stm32f10x_dma.c \
-		stm32f10x_exti.c \
-		stm32f10x_flash.c \
-		stm32f10x_fsmc.c \
-		stm32f10x_gpio.c \
-		stm32f10x_i2c.c \
-		stm32f10x_iwdg.c \
-		stm32f10x_pwr.c \
-		stm32f10x_rcc.c \
-		stm32f10x_rtc.c \
-		stm32f10x_sdio.c \
-		stm32f10x_spi.c \
-		stm32f10x_tim.c \
-		stm32f10x_usart.c \
-		stm32f10x_wwdg.c
+SPATH	+= ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdir}/startup/gcc_ride7
+SFILES 	+= $(STARTUP)
+
+CPATH	+= ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore}
+INC		+= -I./${stmdriverdir}/inc
+INC		+= -I./${stmcmsisdir}
+INC		+= -I./${stmcmsisdircore}
+
+CFILES	+= misc.c
+CFILES	+= stm32f10x_adc.c
+CFILES	+= stm32f10x_bkp.c
+CFILES	+= stm32f10x_can.c
+CFILES	+= stm32f10x_cec.c
+CFILES	+= stm32f10x_crc.c
+CFILES	+= stm32f10x_dac.c
+CFILES	+= stm32f10x_dbgmcu.c
+CFILES	+= stm32f10x_dma.c
+CFILES	+= stm32f10x_exti.c
+CFILES	+= stm32f10x_flash.c
+CFILES	+= stm32f10x_fsmc.c
+CFILES	+= stm32f10x_gpio.c
+CFILES	+= stm32f10x_i2c.c
+CFILES	+= stm32f10x_iwdg.c
+CFILES	+= stm32f10x_pwr.c
+CFILES	+= stm32f10x_rcc.c
+CFILES	+= stm32f10x_rtc.c
+CFILES	+= stm32f10x_sdio.c
+CFILES	+= stm32f10x_spi.c
+CFILES	+= stm32f10x_tim.c
+CFILES	+= stm32f10x_usart.c
+CFILES	+= stm32f10x_wwdg.c
 		
 # cmsis files
-FILES += 	system_stm32f10x.c \
-		core_cm3.c
-
+CFILES	+= system_stm32f10x.c
+CFILES	+= core_cm3.c
 
 # stm32 system
-FILES +=	stm32f10x_it.c
+CFILES 	+= stm32f10x_it.c
 
-# usb files
-FILES +=	usb_core.c \
-			usb_init.c \
-			usb_int.c \
-			usb_mem.c \
-			usb_regs.c \
-			usb_sil.c \
-			usb_hw_config.c \
-			usb_desc.c \
-			usb_endp.c \
-			usb_istr.c \
-			usb_prop.c \
-			usb_pwr.c
-
-# bootloader files
-RFILES =	bootloader.c \
-			bootloader_hal.c
+# generic system configuration
+include config.mk 
 
 LIBS = 
 
@@ -204,17 +179,15 @@ BINARYEXT = .hex
 #
 ############
 
-vpath %.c ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdircore} ${comm_dir}/src \
-${tinyheap_dir}/src ${enc28j60_dir}/src ${spiffs_dir}/src \
-${sourcedir}/usb
-
-vpath %.s ${sourcedir} ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdir}/startup/gcc_ride7
+vpath %.c $(CPATH)
+vpath %.s $(SPATH)
+INCLUDE_DIRECTIVES += $(INC)
 
 SOBJFILES = $(SFILES:%.s=${builddir}/%.o)
-OBJFILES = $(FILES:%.c=${builddir}/%.o)
+OBJFILES = $(CFILES:%.c=${builddir}/%.o)
 ROBJFILES = $(RFILES:%.c=${builddir}/%.o)
 
-DEPFILES = $(FILES:%.c=${builddir}/%.d)
+DEPFILES = $(CFILES:%.c=${builddir}/%.d)
 DEPFILES += $(RFILES:%.c=${builddir}/%.d)
 
 ALLOBJFILES  = $(SOBJFILES)
@@ -249,9 +222,9 @@ $(OBJFILES) : ${builddir}/%.o:%.c
 		@echo "... compile $@"
 		@${CC} -c -o $@ $<
 
-# compile relocatable c files
+# compile c files deisgnated for ram
 $(ROBJFILES) : ${builddir}/%.o:%.c
-		@echo "... relocatable compile $@"
+		@echo "... ram compile $@"
 		@${CC} -c -o $@ $< 
 
 # make dependencies
@@ -288,10 +261,34 @@ clean:
 install: $(BINARY)
 	@sed 's/BUILDFILE/${builddir}\/${BINARY}.out/' stm32flash.script > _stm32flash.script
 	@echo "script _stm32flash.script" | nc localhost 4444
-	
 
 debug: $(BINARY)
 	@${GDB} ${builddir}/${BINARY}.elf -x debug.gdb
+	
+config-header:
+	@echo "* Generating config header ${hfile}.."
+	@echo "// Auto generated file, do not tamper" > ${hfile}
+	@echo "#ifdef INCLUDE_CONFIG_HEADER" >> ${hfile}
+	@echo "#ifndef _CONFIG_HEADER_H" >> ${hfile}
+	@echo "#define _CONFIG_HEADER_H" >> ${hfile}
+	@sed -nr 's/([^ \t]*)?[ \t]*=[ \t]*1/#define \1/p' config.mk >> ${hfile}
+	@echo "#endif" >> ${hfile}
+	@echo "#endif" >> ${hfile}
+
+build-info:
+	@echo "*** INCLUDE PATHS"
+	@echo "${INC}"
+	@echo "*** SOURCE PATHS"
+	@echo "${CPATH}"
+	@echo "*** ASSEMBLY PATHS"
+	@echo "${SPATH}"
+	@echo "*** SOURCE FILES"
+	@echo "${CFILES}"
+	@echo "*** ASSEMBLY FILES"
+	@echo "${SFILES}"
+	@echo "*** FLAGS"
+	@echo "${FLAGS}"
+	
 	
 ############
 #

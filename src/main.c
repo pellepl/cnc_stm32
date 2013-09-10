@@ -1,6 +1,7 @@
 #include "stm32f10x.h"
 #include "system.h"
 #include "uart_driver.h"
+#include "io.h"
 #include "timer.h"
 #include "comm_proto_sys.h"
 #include "comm_proto_cnc.h"
@@ -104,7 +105,7 @@ static void *kernel_func(void *a) {
   print(TEXT_NOTE("Kernel running...\n"));
 
   // init comm stack and connect to phy
-  COMM_UART_init(_UART(COMMIN));
+  COMM_UART_init(_UART(UARTCOMMIN));
   COMM_UDP_init();
   COMM_init();
   // TODO PETER COMM_set_stack(COMM_UART_get_comm(), 0);
@@ -171,11 +172,11 @@ static void main_spi_cb(spi_flash_dev *dev, int result) {
 
 int main(void) {
   s32_t res;
-  __disable_irq();
+  enter_critical();
   PROC_base_init();
   SYS_init();
   UART_init();
-  UART_assure_tx(_UART(STDOUT), TRUE);
+  UART_assure_tx(_UART(UARTSTDOUT), TRUE);
 #ifdef CONFIG_SPI
   SPI_init();
 #endif
@@ -191,10 +192,16 @@ int main(void) {
   I2C_init();
 #endif
 #ifdef CONFIG_USB_CDC
-  USB_Init();
+  usb_serial_init();
 #endif
 
-  __enable_irq();
+  exit_critical();
+
+  IO_define(IOSTD, io_uart, UARTSTDIN);
+  IO_define(IOSPL, io_uart, UARTSPLIN);
+  IO_define(IOBT, io_uart, UARTBTIN);
+  IO_define(IOCOMM, io_uart, UARTCOMMIN);
+
   print("\n\n\nHardware initialization done\n");
 
   print("Shared memory on 0x%08x\n", SHARED_MEMORY_ADDRESS);
@@ -274,7 +281,7 @@ int main(void) {
 
 
   while(1) {
-    __WFI();
+    arch_sleep();
   }
 
   return 0;
@@ -326,93 +333,95 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
   asm("mrs %0, psp" : "=r"(HARDFAULT_PSP) : :);
   stack_pointer = HARDFAULT_PSP;
 
-  UART_sync_tx(_UART(STDOUT), TRUE);
+  u8_t io = IODBG;
 
-  UART_tx_flush(_UART(STDOUT));
+  IO_blocking_tx(io, TRUE);
 
-  print(TEXT_BAD("\n!!! HARDFAULT !!!\n\n"));
-  print("Stacked registers:\n");
-  print("  pc:   0x%08x\n", stacked_pc);
-  print("  lr:   0x%08x\n", stacked_lr);
-  print("  psr:  0x%08x\n", stacked_psr);
-  print("  sp:   0x%08x\n", stack_pointer);
-  print("  r0:   0x%08x\n", stacked_r0);
-  print("  r1:   0x%08x\n", stacked_r1);
-  print("  r2:   0x%08x\n", stacked_r2);
-  print("  r3:   0x%08x\n", stacked_r3);
-  print("  r12:  0x%08x\n", stacked_r12);
-  print("\nFault status registers:\n");
-  print("  BFAR: 0x%08x\n", bfar);
-  print("  CFSR: 0x%08x\n", cfsr);
-  print("  HFSR: 0x%08x\n", hfsr);
-  print("  DFSR: 0x%08x\n", dfsr);
-  print("  AFSR: 0x%08x\n", afsr);
-  print("\n");
+  IO_tx_flush(io);
+
+  ioprint(io, TEXT_BAD("\n!!! HARDFAULT !!!\n\n"));
+  ioprint(io, "Stacked registers:\n");
+  ioprint(io, "  pc:   0x%08x\n", stacked_pc);
+  ioprint(io, "  lr:   0x%08x\n", stacked_lr);
+  ioprint(io, "  psr:  0x%08x\n", stacked_psr);
+  ioprint(io, "  sp:   0x%08x\n", stack_pointer);
+  ioprint(io, "  r0:   0x%08x\n", stacked_r0);
+  ioprint(io, "  r1:   0x%08x\n", stacked_r1);
+  ioprint(io, "  r2:   0x%08x\n", stacked_r2);
+  ioprint(io, "  r3:   0x%08x\n", stacked_r3);
+  ioprint(io, "  r12:  0x%08x\n", stacked_r12);
+  ioprint(io, "\nFault status registers:\n");
+  ioprint(io, "  BFAR: 0x%08x\n", bfar);
+  ioprint(io, "  CFSR: 0x%08x\n", cfsr);
+  ioprint(io, "  HFSR: 0x%08x\n", hfsr);
+  ioprint(io, "  DFSR: 0x%08x\n", dfsr);
+  ioprint(io, "  AFSR: 0x%08x\n", afsr);
+  ioprint(io, "\n");
   if (cfsr & (1<<(7+0))) {
-    print("MMARVALID: MemMan 0x%08x\n", SCB->MMFAR);
+    ioprint(io, "MMARVALID: MemMan 0x%08x\n", SCB->MMFAR);
   }
   if (cfsr & (1<<(4+0))) {
-    print("MSTKERR: MemMan error during stacking\n");
+    ioprint(io, "MSTKERR: MemMan error during stacking\n");
   }
   if (cfsr & (1<<(3+0))) {
-    print("MUNSTKERR: MemMan error during unstacking\n");
+    ioprint(io, "MUNSTKERR: MemMan error during unstacking\n");
   }
   if (cfsr & (1<<(1+0))) {
-    print("DACCVIOL: MemMan memory access violation, data\n");
+    ioprint(io, "DACCVIOL: MemMan memory access violation, data\n");
   }
   if (cfsr & (1<<(0+0))) {
-    print("IACCVIOL: MemMan memory access violation, instr\n");
+    ioprint(io, "IACCVIOL: MemMan memory access violation, instr\n");
   }
 
   if (cfsr & (1<<(7+8))) {
-    print("BFARVALID: BusFlt 0x%08x\n", SCB->BFAR);
+    ioprint(io, "BFARVALID: BusFlt 0x%08x\n", SCB->BFAR);
   }
   if (cfsr & (1<<(4+8))) {
-    print("STKERR: BusFlt error during stacking\n");
+    ioprint(io, "STKERR: BusFlt error during stacking\n");
   }
   if (cfsr & (1<<(3+8))) {
-    print("UNSTKERR: BusFlt error during unstacking\n");
+    ioprint(io, "UNSTKERR: BusFlt error during unstacking\n");
   }
   if (cfsr & (1<<(2+8))) {
-    print("IMPRECISERR: BusFlt error during data access\n");
+    ioprint(io, "IMPRECISERR: BusFlt error during data access\n");
   }
   if (cfsr & (1<<(1+8))) {
-    print("PRECISERR: BusFlt error during data access\n");
+    ioprint(io, "PRECISERR: BusFlt error during data access\n");
   }
   if (cfsr & (1<<(0+8))) {
-    print("IBUSERR: BusFlt bus error\n");
+    ioprint(io, "IBUSERR: BusFlt bus error\n");
   }
 
   if (cfsr & (1<<(9+16))) {
-    print("DIVBYZERO: UsaFlt division by zero\n");
+    ioprint(io, "DIVBYZERO: UsaFlt division by zero\n");
   }
   if (cfsr & (1<<(8+16))) {
-    print("UNALIGNED: UsaFlt unaligned access\n");
+    ioprint(io, "UNALIGNED: UsaFlt unaligned access\n");
   }
   if (cfsr & (1<<(3+16))) {
-    print("NOCP: UsaFlt execute coprocessor instr\n");
+    ioprint(io, "NOCP: UsaFlt execute coprocessor instr\n");
   }
   if (cfsr & (1<<(2+16))) {
-    print("INVPC: UsaFlt general\n");
+    ioprint(io, "INVPC: UsaFlt general\n");
   }
   if (cfsr & (1<<(1+16))) {
-    print("INVSTATE: UsaFlt execute ARM instr\n");
+    ioprint(io, "INVSTATE: UsaFlt execute ARM instr\n");
   }
   if (cfsr & (1<<(0+16))) {
-    print("UNDEFINSTR: UsaFlt execute bad instr\n");
+    ioprint(io, "UNDEFINSTR: UsaFlt execute bad instr\n");
   }
 
   if (hfsr & (1<<31)) {
-    print("DEBUGEVF: HardFlt debug event\n");
+    ioprint(io, "DEBUGEVF: HardFlt debug event\n");
   }
   if (hfsr & (1<<30)) {
-    print("FORCED: HardFlt SVC/BKPT within SVC\n");
+    ioprint(io, "FORCED: HardFlt SVC/BKPT within SVC\n");
   }
   if (hfsr & (1<<1)) {
-    print("VECTBL: HardFlt vector fetch failed\n");
+    ioprint(io, "VECTBL: HardFlt vector fetch failed\n");
   }
 
-  SYS_dump_trace();
+  SYS_dump_trace(IODBG);
 
   while(1);
 }
