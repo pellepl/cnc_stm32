@@ -401,6 +401,8 @@
 // disable all debug output
 //#define DBG_OFF
 
+#define CONFIG_DEFAULT_DEBUG_MASK     (0xffffffff)
+
 // enable or disable tracing
 #define DBG_TRACE_MON
 #define TRACE_SIZE            (512)
