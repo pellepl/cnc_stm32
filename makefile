@@ -94,7 +94,6 @@ SFILES 		+= stm32f10x_it_h.s
 CFILES 		+= main.c
 CFILES 		+= processor.c
 CFILES 		+= cnc_control.c
-CFILES 		+= system.c
 CFILES 		+= led.c
 CFILES 		+= nvstorage.c
 CFILES 		+= config.c
@@ -235,7 +234,7 @@ $(DEPFILES) : ${builddir}/%.d:%.c
 		sed 's,\($*\)\.o[ :]*, ${builddir}/\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
-all: info mkdirs $(BINARY)
+all: info mkdirs ${hfile} $(BINARY)
 
 info:
 	@echo "* Building to ${builddir}"
@@ -265,7 +264,7 @@ install: $(BINARY)
 debug: $(BINARY)
 	@${GDB} ${builddir}/${BINARY}.elf -x debug.gdb
 	
-config-header:
+${hfile}: config.mk
 	@echo "* Generating config header ${hfile}.."
 	@echo "// Auto generated file, do not tamper" > ${hfile}
 	@echo "#ifdef INCLUDE_CONFIG_HEADER" >> ${hfile}

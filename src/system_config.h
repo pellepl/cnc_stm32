@@ -389,9 +389,6 @@
 
 #define CONFIG_SPIFFS
 
-/** WIFI **/
-
-#define CONFIG_WIFI
 
 /** DEBUG **/
 

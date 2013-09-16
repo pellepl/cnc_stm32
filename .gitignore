@@ -5,5 +5,5 @@ _stm32flash.script
 .cproject
 .settings
 .project
-src/config_header
+src/config_header.h
 /Default
