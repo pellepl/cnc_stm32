@@ -349,7 +349,8 @@
 #define IODBG        IOSTD
 
 /** OS **/
-
+// run task queue in thread
+#define CONFIG_TASK_QUEUE_IN_THREAD
 // ctx switch frequency in hertz
 #define CONFIG_OS_PREEMPT_FREQ  2000
 // if enabled, signalled threads will be executed in next ctx switch
