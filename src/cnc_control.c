@@ -30,8 +30,8 @@ static struct {
 
   CNC_Config_t config;
 
-	/* Flag indicating if motor control is active, setting to 0 prohibits any motor activity */
-	volatile u32_t cnc_timer_active;
+  /* Flag indicating if motor control is active, setting to 0 prohibits any motor activity */
+  volatile u32_t cnc_timer_active;
 
   /* Current x position */
   volatile s32_t pos_x;
@@ -47,40 +47,40 @@ static struct {
   /* Offset z position */
   volatile s32_t offs_pos_z;
 
-	/* Current motion of all axes */
-	CNC_Motion_t cur_motion;
+  /* Current motion of all axes */
+  CNC_Motion_t cur_motion;
 
-	/* Pause granularity counter*/
-	u32_t pause_tick;
+  /* Pause granularity counter*/
+  u32_t pause_tick;
 
-	/* Pipeline active */
-	volatile u32_t pipe_active;
-	/* Pipelined motion definitions */
-	CNC_Motion_t pipe[CNC_PIPE_CAPACITY];
-	/* Index of first pipelined motion definition, at the end of current motion this will be active */
-	u32_t pipe_start;
-	/* Index of last pipelined motion definition */
-	u32_t pipe_end;
-	/* Number of pipelined motion definitions */
-	u32_t pipe_len;
-	cnc_pipe_callback pipe_cb;
+  /* Pipeline active */
+  volatile u32_t pipe_active;
+  /* Pipelined motion definitions */
+  CNC_Motion_t pipe[CNC_PIPE_CAPACITY];
+  /* Index of first pipelined motion definition, at the end of current motion this will be active */
+  u32_t pipe_start;
+  /* Index of last pipelined motion definition */
+  u32_t pipe_end;
+  /* Number of pipelined motion definitions */
+  u32_t pipe_len;
+  cnc_pipe_callback pipe_cb;
 
 
-	/* Motion register latch */
-	CNC_Motion_t latch;
-	/* Flag indicating if something needs to be latched into pipeline when current motion has ended */
-	volatile u32_t latch_registers;
-	/* Current flag id register */
-	u32_t latch_id;
+  /* Motion register latch */
+  CNC_Motion_t latch;
+  /* Flag indicating if something needs to be latched into pipeline when current motion has ended */
+  volatile u32_t latch_registers;
+  /* Current flag id register */
+  u32_t latch_id;
 
-	/* Probe status flag */
-	u32_t probe_status;
-	/* Current probe count */
-	u32_t probe_count;
-	/* Current probe count */
-	u32_t cur_probe_count;
-	/* Z frequency on touch */
-	u32_t probe_z_freq_on_touch;
+  /* Probe status flag */
+  u32_t probe_status;
+  /* Current probe count */
+  u32_t probe_count;
+  /* Current probe count */
+  u32_t cur_probe_count;
+  /* Z frequency on touch */
+  u32_t probe_z_freq_on_touch;
 } machine;
 
 
@@ -88,11 +88,11 @@ void CNC_init(cnc_sr_callback sr_f, cnc_pipe_callback pipe_f,
     cnc_pos_callback pos_f, cnc_offs_callback offs_f) {
   DBG(D_APP, D_DEBUG, "CNC init\n");
 
-	machine.cnc_timer_active = FALSE;
-	memset(&machine, 0, sizeof(machine));
-	machine.sr_err_mask = 0xff;
-	machine.pipe_active = TRUE;
-	machine.probe_status = CNC_PROBE_DISABLED;
+  machine.cnc_timer_active = FALSE;
+  memset(&machine, 0, sizeof(machine));
+  machine.sr_err_mask = 0xff;
+  machine.pipe_active = TRUE;
+  machine.probe_status = CNC_PROBE_DISABLED;
   machine.sr_cb = sr_f;
   machine.pipe_cb = pipe_f;
   machine.pos_cb = pos_f;
@@ -121,54 +121,54 @@ static bool update_axis_regs(CNC_Axis_t axis_def, CNC_Vector_t* pAxis, u32_t rap
   if (pAxis->step_count == 0) {
     return FALSE;
   }
-	pAxis->timer_counter +=
-			MIN(
-			    ((machine.config.max_freq[axis_def]) << CNC_FP_DECIMALS),
-			    (pAxis->step_freq + pAxis->step_freq_adj));
+  pAxis->timer_counter +=
+      MIN(
+          ((machine.config.max_freq[axis_def]) << CNC_FP_DECIMALS),
+          (pAxis->step_freq + pAxis->step_freq_adj));
 
-	if (pAxis->timer_counter >= (CNC_TIMER_FREQ << CNC_FP_DECIMALS)) {
-		pAxis->timer_counter -= (CNC_TIMER_FREQ << CNC_FP_DECIMALS);
-		if (pAxis->step_count > 0) {
-			pAxis->step_count--;
-			if (rapid) {
-				if (pAxis->step_count >= pAxis->step_count_half) {
-					pAxis->step_freq_adj += machine.config.rapid_delta[axis_def];
-				} else {
-					pAxis->step_freq_adj -= machine.config.rapid_delta[axis_def];
-				}
-			}
-			if (pAxis->step_count == 0) {
-				// reached end of travel, reset motion registers
-				pAxis->step_freq = 0;
-				pAxis->step_freq_adj = 0;
-				pAxis->timer_counter = 0;
-			}
-		}
-		return TRUE;
-	}
-	return FALSE;
+  if (pAxis->timer_counter >= (CNC_TIMER_FREQ << CNC_FP_DECIMALS)) {
+    pAxis->timer_counter -= (CNC_TIMER_FREQ << CNC_FP_DECIMALS);
+    if (pAxis->step_count > 0) {
+      pAxis->step_count--;
+      if (rapid) {
+        if (pAxis->step_count >= pAxis->step_count_half) {
+          pAxis->step_freq_adj += machine.config.rapid_delta[axis_def];
+        } else {
+          pAxis->step_freq_adj -= machine.config.rapid_delta[axis_def];
+        }
+      }
+      if (pAxis->step_count == 0) {
+        // reached end of travel, reset motion registers
+        pAxis->step_freq = 0;
+        pAxis->step_freq_adj = 0;
+        pAxis->timer_counter = 0;
+      }
+    }
+    return TRUE;
+  }
+  return FALSE;
 }
 
 static void copy_axis_regs(CNC_Vector_t* pAxisDest, CNC_Vector_t* pAxisSrc) {
-	pAxisDest->step_freq = pAxisSrc->step_freq;
-	pAxisDest->step_freq_adj = pAxisSrc->step_freq_adj;
-	pAxisDest->dir = pAxisSrc->dir;
-	pAxisDest->step_count = pAxisSrc->step_count;
-	pAxisDest->step_count_half = pAxisSrc->step_count_half;
+  pAxisDest->step_freq = pAxisSrc->step_freq;
+  pAxisDest->step_freq_adj = pAxisSrc->step_freq_adj;
+  pAxisDest->dir = pAxisSrc->dir;
+  pAxisDest->step_count = pAxisSrc->step_count;
+  pAxisDest->step_count_half = pAxisSrc->step_count_half;
 }
 
 static void copy_motion(CNC_Motion_t* pMotionDest, CNC_Motion_t* pMotionSrc) {
-	pMotionDest->id = pMotionSrc->id;
-	pMotionDest->rapid = pMotionSrc->rapid;
-	copy_axis_regs(&pMotionDest->vector[X_AXIS], &pMotionSrc->vector[X_AXIS]);
-	copy_axis_regs(&pMotionDest->vector[Y_AXIS], &pMotionSrc->vector[Y_AXIS]);
-	copy_axis_regs(&pMotionDest->vector[Z_AXIS], &pMotionSrc->vector[Z_AXIS]);
+  pMotionDest->id = pMotionSrc->id;
+  pMotionDest->rapid = pMotionSrc->rapid;
+  copy_axis_regs(&pMotionDest->vector[X_AXIS], &pMotionSrc->vector[X_AXIS]);
+  copy_axis_regs(&pMotionDest->vector[Y_AXIS], &pMotionSrc->vector[Y_AXIS]);
+  copy_axis_regs(&pMotionDest->vector[Z_AXIS], &pMotionSrc->vector[Z_AXIS]);
 
-	if (pMotionSrc->pause > 0) {
-		if (pMotionDest == &machine.cur_motion) {
-			machine.pause_tick = 0;
-		}
-	}
+  if (pMotionSrc->pause > 0) {
+    if (pMotionDest == &machine.cur_motion) {
+      machine.pause_tick = 0;
+    }
+  }
   pMotionDest->pause = pMotionSrc->pause;
 }
 
@@ -190,12 +190,12 @@ void CNC_timer() {
     LED_blink(LED_ERROR1 | LED_ERROR2 | LED_ERROR3, 32, 20, 1);
     return;
   }
-	if (!machine.cnc_timer_active) {
-		// prevent any tampering with cnc registers and control port
+  if (!machine.cnc_timer_active) {
+    // prevent any tampering with cnc registers and control port
     LED_blink_single(LED_CNC_DISABLE_BIT, 16, 3, 1);
-	  LED_blink_single(LED_CNC_WORK_BIT, 64, 1, 1);
-		return;
-	}
+    LED_blink_single(LED_CNC_WORK_BIT, 64, 1, 1);
+    return;
+  }
 
   if (sr & (1<<CNC_STATUS_BIT_MOVEMENT_PAUSE)) {
     LED_blink_single(LED_CNC_WORK_BIT, 16, 8, 1);
@@ -205,28 +205,28 @@ void CNC_timer() {
     LED_blink_single(LED_CNC_WORK_BIT, 16, 15, 1);
   }
 
-	// probe sense control
-	if (machine.probe_status != CNC_PROBE_DISABLED && machine.probe_status != CNC_PROBE_CONTACT) {
-		int triggerPort = 0;//GP3DAT & 0xff;
-		if ((triggerPort & (1<<1)) != 0) {
-			machine.cur_motion.vector[Z_AXIS].step_freq = machine.probe_z_freq_on_touch;
-			machine.probe_status = CNC_PROBE_SENSE;
-			machine.cur_probe_count++;
-			if (machine.cur_probe_count >= machine.probe_count) {
-				machine.probe_status = CNC_PROBE_CONTACT;
-				CNC_set_regs_imm(0,0,0,0,0,0);
-			}
-		} else {
-			machine.cur_probe_count = 0;
-		}
-	}
+  // probe sense control
+  if (machine.probe_status != CNC_PROBE_DISABLED && machine.probe_status != CNC_PROBE_CONTACT) {
+    int triggerPort = 0;//GP3DAT & 0xff;
+    if ((triggerPort & (1<<1)) != 0) {
+      machine.cur_motion.vector[Z_AXIS].step_freq = machine.probe_z_freq_on_touch;
+      machine.probe_status = CNC_PROBE_SENSE;
+      machine.cur_probe_count++;
+      if (machine.cur_probe_count >= machine.probe_count) {
+        machine.probe_status = CNC_PROBE_CONTACT;
+        CNC_set_regs_imm(0,0,0,0,0,0);
+      }
+    } else {
+      machine.cur_probe_count = 0;
+    }
+  }
 
-	// movement
-	{
-	  // axes timer overflow flags
-	  u32_t ov_axes = 0;
+  // movement
+  {
+    // axes timer overflow flags
+    u32_t ov_axes = 0;
 
-	  // check pause
+    // check pause
     if (machine.cur_motion.pause > 0) {
       // paused, no motion
       if (machine.pause_tick > 0) {
@@ -286,100 +286,100 @@ void CNC_timer() {
     if (machine.pos_cb && (ov_axes != 0)) {
       machine.pos_cb(machine.pos_x, machine.pos_y, machine.pos_z);
     }
-	}
+  }
 
-	// motion pipeline execution
-	if (machine.pipe_active
-	    && machine.cur_motion.vector[X_AXIS].step_count == 0
-			&& machine.cur_motion.vector[Y_AXIS].step_count == 0
-			&& machine.cur_motion.vector[Z_AXIS].step_count == 0
-			&& machine.cur_motion.pause == 0) {
-		// no current motion, something in the pipe?
-		if (machine.pipe_len > 0) {
-			copy_motion(&machine.cur_motion, &machine.pipe[machine.pipe_start]);
-			machine.pipe[machine.pipe_start].id = 0; // clear id of used motion
+  // motion pipeline execution
+  if (machine.pipe_active
+      && machine.cur_motion.vector[X_AXIS].step_count == 0
+      && machine.cur_motion.vector[Y_AXIS].step_count == 0
+      && machine.cur_motion.vector[Z_AXIS].step_count == 0
+      && machine.cur_motion.pause == 0) {
+    // no current motion, something in the pipe?
+    if (machine.pipe_len > 0) {
+      copy_motion(&machine.cur_motion, &machine.pipe[machine.pipe_start]);
+      machine.pipe[machine.pipe_start].id = 0; // clear id of used motion
 
-			machine.pipe_start++;
-			if (machine.pipe_start >= CNC_PIPE_CAPACITY) {
-				machine.pipe_start = 0;
-			}
-			machine.pipe_len--;
-			if (machine.pipe_cb) {
-			  machine.pipe_cb(machine.cur_motion.id);
-			}
-		}
-	}
+      machine.pipe_start++;
+      if (machine.pipe_start >= CNC_PIPE_CAPACITY) {
+        machine.pipe_start = 0;
+      }
+      machine.pipe_len--;
+      if (machine.pipe_cb) {
+        machine.pipe_cb(machine.cur_motion.id);
+      }
+    }
+  }
 
-	// motion latch
-	// something to latch, is there room for it in our pipe
-	if (machine.latch_registers && machine.pipe_len < CNC_PIPE_CAPACITY) {
-		copy_motion(&machine.pipe[machine.pipe_end], &machine.latch);
-		machine.pipe_end++;
-		if (machine.pipe_end >= CNC_PIPE_CAPACITY) {
-			machine.pipe_end = 0;
-		}
-		machine.pipe_len++;
-		machine.latch_registers = FALSE;
-	}
+  // motion latch
+  // something to latch, is there room for it in our pipe
+  if (machine.latch_registers && machine.pipe_len < CNC_PIPE_CAPACITY) {
+    copy_motion(&machine.pipe[machine.pipe_end], &machine.latch);
+    machine.pipe_end++;
+    if (machine.pipe_end >= CNC_PIPE_CAPACITY) {
+      machine.pipe_end = 0;
+    }
+    machine.pipe_len++;
+    machine.latch_registers = FALSE;
+  }
 }
 
 u32_t CNC_get_status() {
   u32_t sr = 0;
-	sr |= ((machine.cnc_timer_active ? 1 : 0) << CNC_STATUS_BIT_CONTROL_ENABLED);
-	sr |= ((machine.cur_motion.vector[X_AXIS].step_count == 0 &&
-			machine.cur_motion.vector[Y_AXIS].step_count == 0 &&
-			machine.cur_motion.vector[Z_AXIS].step_count	== 0 &&
-			machine.cur_motion.pause == 0 ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_STILL);
-	sr |= ((machine.cur_motion.pause != 0 ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_PAUSE);
-	sr |= ((machine.cur_motion.rapid ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_RAPID);
+  sr |= ((machine.cnc_timer_active ? 1 : 0) << CNC_STATUS_BIT_CONTROL_ENABLED);
+  sr |= ((machine.cur_motion.vector[X_AXIS].step_count == 0 &&
+      machine.cur_motion.vector[Y_AXIS].step_count == 0 &&
+      machine.cur_motion.vector[Z_AXIS].step_count  == 0 &&
+      machine.cur_motion.pause == 0 ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_STILL);
+  sr |= ((machine.cur_motion.pause != 0 ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_PAUSE);
+  sr |= ((machine.cur_motion.rapid ? 1 : 0) << CNC_STATUS_BIT_MOVEMENT_RAPID);
 
-	sr |= ((machine.pipe_active ? 1 : 0) << CNC_STATUS_BIT_PIPE_ACTIVE);
-	sr |= ((machine.pipe_len == 0 ? 1 : 0) << CNC_STATUS_BIT_PIPE_EMPTY);
-	sr |= ((machine.pipe_len >= CNC_PIPE_CAPACITY ? 1 : 0) << CNC_STATUS_BIT_PIPE_FULL);
+  sr |= ((machine.pipe_active ? 1 : 0) << CNC_STATUS_BIT_PIPE_ACTIVE);
+  sr |= ((machine.pipe_len == 0 ? 1 : 0) << CNC_STATUS_BIT_PIPE_EMPTY);
+  sr |= ((machine.pipe_len >= CNC_PIPE_CAPACITY ? 1 : 0) << CNC_STATUS_BIT_PIPE_FULL);
 
-	sr |= ((machine.latch_registers ? 1 : 0) << CNC_STATUS_BIT_LATCH_FULL);
+  sr |= ((machine.latch_registers ? 1 : 0) << CNC_STATUS_BIT_LATCH_FULL);
 
-	sr |= (machine.sr_err << 8) & 0xff00;
+  sr |= (machine.sr_err << 8) & 0xff00;
 
-	return sr;
+  return sr;
 }
 
 void CNC_set_enabled(u32_t enable) {
-	machine.cnc_timer_active = enable;
+  machine.cnc_timer_active = enable;
 }
 
 void CNC_pipeline_enable(u32_t enable) {
-	machine.pipe_active = enable;
+  machine.pipe_active = enable;
 }
 
 u32_t CNC_is_latch_free() {
-	return (!machine.latch_registers);
+  return (!machine.latch_registers);
 }
 
 static void set_latch_motion_regs_for_axis(CNC_Vector_t* pAxis, s32_t steps,
     u32_t freq, u32_t rapid) {
-	pAxis->dir = steps > 0 ? 1 : 0;
-	if (steps < 0) {
-		steps = -steps;
-	}
-	if (rapid) {
-		pAxis->step_count_half = steps >> 1;
-	}
-	pAxis->step_count = freq == 0 ? 0 : steps;
-	pAxis->step_freq = freq;
-	pAxis->step_freq_adj = 0;
+  pAxis->dir = steps > 0 ? 1 : 0;
+  if (steps < 0) {
+    steps = -steps;
+  }
+  if (rapid) {
+    pAxis->step_count_half = steps >> 1;
+  }
+  pAxis->step_count = freq == 0 ? 0 : steps;
+  pAxis->step_freq = freq;
+  pAxis->step_freq_adj = 0;
 }
 
 void CNC_set_latch_id(u32_t id) {
-	machine.latch_id = id;
+  machine.latch_id = id;
 }
 
 u32_t CNC_get_current_motion_id() {
-	return machine.cur_motion.id;
+  return machine.cur_motion.id;
 }
 
 void CNC_get_motion(CNC_Motion_t* pMotion) {
-	copy_motion(pMotion, &machine.cur_motion);
+  copy_motion(pMotion, &machine.cur_motion);
 }
 
 u32_t CNC_latch_xyz(s32_t stepsX, u32_t freqX, s32_t stepsY, u32_t freqY, s32_t stepsZ,
@@ -388,15 +388,15 @@ u32_t CNC_latch_xyz(s32_t stepsX, u32_t freqX, s32_t stepsY, u32_t freqY, s32_t 
     return CNC_ERR_LATCH_BUSY;
   }
   machine.latch.id = machine.latch_id++;
-	machine.latch.rapid = rapid;
-	set_latch_motion_regs_for_axis(&machine.latch.vector[X_AXIS], stepsX, freqX, rapid);
-	set_latch_motion_regs_for_axis(&machine.latch.vector[Y_AXIS], stepsY, freqY, rapid);
-	set_latch_motion_regs_for_axis(&machine.latch.vector[Z_AXIS], stepsZ, freqZ, rapid);
-	machine.latch.pause = 0;
+  machine.latch.rapid = rapid;
+  set_latch_motion_regs_for_axis(&machine.latch.vector[X_AXIS], stepsX, freqX, rapid);
+  set_latch_motion_regs_for_axis(&machine.latch.vector[Y_AXIS], stepsY, freqY, rapid);
+  set_latch_motion_regs_for_axis(&machine.latch.vector[Z_AXIS], stepsZ, freqZ, rapid);
+  machine.latch.pause = 0;
 
-	machine.latch_registers = TRUE;
+  machine.latch_registers = TRUE;
 
-	return machine.latch.id;
+  return machine.latch.id;
 }
 
 u32_t CNC_latch_pause(u32_t timeInMs) {
@@ -404,13 +404,13 @@ u32_t CNC_latch_pause(u32_t timeInMs) {
     return CNC_ERR_LATCH_BUSY;
   }
   machine.latch.id = machine.latch_id++;
-	set_latch_motion_regs_for_axis(&machine.latch.vector[X_AXIS], 0, 0, 0);
-	set_latch_motion_regs_for_axis(&machine.latch.vector[Y_AXIS], 0, 0, 0);
-	set_latch_motion_regs_for_axis(&machine.latch.vector[Z_AXIS], 0, 0, 0);
-	machine.latch.pause = timeInMs == 0 ? 0 : 1 + timeInMs;
+  set_latch_motion_regs_for_axis(&machine.latch.vector[X_AXIS], 0, 0, 0);
+  set_latch_motion_regs_for_axis(&machine.latch.vector[Y_AXIS], 0, 0, 0);
+  set_latch_motion_regs_for_axis(&machine.latch.vector[Z_AXIS], 0, 0, 0);
+  machine.latch.pause = timeInMs == 0 ? 0 : 1 + timeInMs;
   machine.latch_registers = TRUE;
 
-	return machine.latch.id;
+  return machine.latch.id;
 }
 
 static void set_imm_motion_regs_for_axis(CNC_Vector_t* pAxis,
@@ -419,55 +419,55 @@ static void set_imm_motion_regs_for_axis(CNC_Vector_t* pAxis,
   if (steps < 0) {
     steps = -steps;
   }
-	pAxis->step_count = steps;
-	pAxis->step_freq = freq;
-	pAxis->step_freq_adj = 0;
+  pAxis->step_count = steps;
+  pAxis->step_freq = freq;
+  pAxis->step_freq_adj = 0;
 }
 
 void CNC_pipeline_flush() {
-	int oldActive = machine.cnc_timer_active;
-	machine.cnc_timer_active = FALSE;
-	machine.pipe_len = 0;
-	machine.pipe_start = 0;
-	machine.pipe_end = 0;
-	memset(&machine.pipe, 0, sizeof(machine.pipe) >> 1);
-	memset(&machine.latch, 0, sizeof(machine.latch) >> 1);
-	machine.latch_registers = FALSE;
-	machine.cnc_timer_active = oldActive;
+  int oldActive = machine.cnc_timer_active;
+  machine.cnc_timer_active = FALSE;
+  machine.pipe_len = 0;
+  machine.pipe_start = 0;
+  machine.pipe_end = 0;
+  memset(&machine.pipe, 0, sizeof(machine.pipe) >> 1);
+  memset(&machine.latch, 0, sizeof(machine.latch) >> 1);
+  machine.latch_registers = FALSE;
+  machine.cnc_timer_active = oldActive;
 }
 
 void CNC_set_x_imm(s32_t stepsX, u32_t freqX) {
-	machine.cur_motion.rapid = FALSE;
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[X_AXIS], stepsX, freqX);
+  machine.cur_motion.rapid = FALSE;
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[X_AXIS], stepsX, freqX);
 }
 
 void CNC_set_y_imm(s32_t stepsY, u32_t freqY) {
-	machine.cur_motion.rapid = FALSE;
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Y_AXIS], stepsY, freqY);
+  machine.cur_motion.rapid = FALSE;
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Y_AXIS], stepsY, freqY);
 }
 
 void CNC_set_z_imm(s32_t stepsZ, u32_t freqZ) {
-	machine.cur_motion.rapid = FALSE;
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Z_AXIS], stepsZ, freqZ);
+  machine.cur_motion.rapid = FALSE;
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Z_AXIS], stepsZ, freqZ);
 }
 
 void CNC_set_regs_imm(s32_t stepsX, u32_t freqX, s32_t stepsY, u32_t freqY, s32_t stepsZ, u32_t freqZ) {
-	machine.cur_motion.rapid = FALSE;
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[X_AXIS], stepsX, freqX);
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Y_AXIS], stepsY, freqY);
-	set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Z_AXIS], stepsZ, freqZ);
+  machine.cur_motion.rapid = FALSE;
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[X_AXIS], stepsX, freqX);
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Y_AXIS], stepsY, freqY);
+  set_imm_motion_regs_for_axis(&machine.cur_motion.vector[Z_AXIS], stepsZ, freqZ);
 }
 
 void CNC_get_pos(s32_t* px, s32_t* py, s32_t* pz) {
-	if (px != NULL) {
-		*px = machine.pos_x + machine.offs_pos_x;
-	}
-	if (py != NULL) {
-		*py = machine.pos_y + machine.offs_pos_y;
-	}
-	if (pz != NULL) {
-		*pz = machine.pos_z + machine.offs_pos_z;
-	}
+  if (px != NULL) {
+    *px = machine.pos_x + machine.offs_pos_x;
+  }
+  if (py != NULL) {
+    *py = machine.pos_y + machine.offs_pos_y;
+  }
+  if (pz != NULL) {
+    *pz = machine.pos_z + machine.offs_pos_z;
+  }
 }
 
 void CNC_set_pos(s32_t x, s32_t y, s32_t z) {
@@ -544,18 +544,18 @@ void CNC_disable_error(u32_t error) {
 }
 
 void CNC_set_probe(u32_t enabled, u32_t contactCount, u32_t probeZFreqOnTouch) {
-	if (enabled) {
-		machine.probe_status = CNC_PROBE_NOCONTACT;
-		machine.probe_count = contactCount;
-		machine.cur_probe_count = 0;
-		machine.probe_z_freq_on_touch = probeZFreqOnTouch;
-	} else {
-		machine.probe_status = CNC_PROBE_DISABLED;
-	}
+  if (enabled) {
+    machine.probe_status = CNC_PROBE_NOCONTACT;
+    machine.probe_count = contactCount;
+    machine.cur_probe_count = 0;
+    machine.probe_z_freq_on_touch = probeZFreqOnTouch;
+  } else {
+    machine.probe_status = CNC_PROBE_DISABLED;
+  }
 }
 
 u32_t CNC_get_probe_status() {
-	return machine.probe_status;
+  return machine.probe_status;
 }
 
 #define NIBBLES_CNC_DEC_HI ((32-CNC_FP_DECIMALS+3) / 4)
