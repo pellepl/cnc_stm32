@@ -132,11 +132,11 @@ void UART4_IRQHandler(void)
 }
 #endif
 
-void TIM2_IRQHandler(void)
+void STM32_SYSTEM_TIMER_IRQ_FN(void)
 {
-  //TRACE_IRQ_ENTER(TIM2_IRQn);
+  //TRACE_IRQ_ENTER(STM32_SYSTEM_TIMER_IRQn);
   TIMER_irq();
-  //TRACE_IRQ_EXIT(TIM2_IRQn);
+  //TRACE_IRQ_EXIT(STM32_SYSTEM_TIMER_IRQn);
 }
 
 #include "miniutils.h"

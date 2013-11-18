@@ -16,8 +16,8 @@
 #include "os.h"
 
 void TIMER_irq() {
-  if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
-    TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+  if (TIM_GetITStatus(STM32_SYSTEM_TIMER, TIM_IT_Update) != RESET) {
+    TIM_ClearITPendingBit(STM32_SYSTEM_TIMER, TIM_IT_Update);
 
 #ifdef CONFIG_CNC
     CNC_timer();

@@ -554,13 +554,13 @@ static int f_i2c_scan(void) {
 
 #ifdef CONFIG_USB_CDC
 static int f_usb_init(void) {
-  usb_serial_init();
+  USB_SER_init();
   return 0;
 }
 static int f_usb_tx(u8_t *buf) {
   u8_t d;
   while ((d = *buf++) != 0) {
-    usb_serial_tx_char(d);
+    USB_SER_tx_char(d);
   }
   return 0;
 }

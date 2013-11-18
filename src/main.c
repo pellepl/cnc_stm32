@@ -192,7 +192,7 @@ int main(void) {
   I2C_init();
 #endif
 #ifdef CONFIG_USB_CDC
-  usb_serial_init();
+  USB_SER_init();
 #endif
 
   exit_critical();

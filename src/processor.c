@@ -98,9 +98,9 @@ static void NVIC_config(void)
   // Config pendsv interrupt, lowest
   NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
 
-  // Config & enable TIM2 interrupt
-  NVIC_SetPriority(TIM2_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
-  NVIC_EnableIRQ(TIM2_IRQn);
+  // Config & enable SYSTEM TIM interrupt
+  NVIC_SetPriority(STM32_SYSTEM_TIMER_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
+  NVIC_EnableIRQ(STM32_SYSTEM_TIMER_IRQn);
 
   // Config & enable uarts interrupt
 #ifdef CONFIG_UART1
@@ -545,7 +545,7 @@ static void TIM_config() {
   u16_t prescaler = 0;
 
   /* Time base configuration */
-  TIM_TimeBaseStructure.TIM_Period = SystemCoreClock/SYS_MAIN_TIMER_FREQ;
+  TIM_TimeBaseStructure.TIM_Period = SYS_CPU_FREQ/SYS_MAIN_TIMER_FREQ;
   TIM_TimeBaseStructure.TIM_Prescaler = 0;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -553,13 +553,13 @@ static void TIM_config() {
   TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
 
   /* Prescaler configuration */
-  TIM_PrescalerConfig(TIM2, prescaler, TIM_PSCReloadMode_Immediate);
+  TIM_PrescalerConfig(STM32_SYSTEM_TIMER, prescaler, TIM_PSCReloadMode_Immediate);
 
   /* TIM IT enable */
-  TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+  TIM_ITConfig(STM32_SYSTEM_TIMER, TIM_IT_Update, ENABLE);
 
-  /* TIM2 enable counter */
-  TIM_Cmd(TIM2, ENABLE);
+  /* TIM enable counter */
+  TIM_Cmd(STM32_SYSTEM_TIMER, ENABLE);
 }
 
 static void ADC_config() {

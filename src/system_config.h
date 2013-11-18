@@ -42,6 +42,9 @@
 // enable CNC app
 #define CONFIG_CNC
 
+#define CONFIG_SPI1
+#define CONFIG_SPI2
+
 
 /*********************************************/
 /***** Hardware build time configuration *****/
@@ -150,6 +153,8 @@
 // unstable. Do nod sent multitudes of data using this config
 //#define CONFIG_SPI_POLL
 
+#ifdef CONFIG_SPI1
+
 #define SPI1_MASTER_GPIO              GPIOA
 #define SPI1_MASTER_GPIO_CLK          RCC_APB2Periph_GPIOA
 #define SPI1_MASTER_PIN_SCK           GPIO_Pin_5
@@ -167,6 +172,10 @@
 #define SPI1_MASTER_Rx_IRQ_Channel    DMA1_Channel2_IRQn
 #define SPI1_MASTER_Tx_IRQ_Channel    DMA1_Channel3_IRQn
 
+#endif // CONFIG_SPI1
+
+#ifdef CONFIG_SPI2
+
 #define SPI2_MASTER_GPIO              GPIOB
 #define SPI2_MASTER_GPIO_CLK          RCC_APB2Periph_GPIOB
 #define SPI2_MASTER_PIN_SCK           GPIO_Pin_13
@@ -183,6 +192,8 @@
 #define SPI2_MASTER_Tx_DMA_Channel    DMA1_Channel5
 #define SPI2_MASTER_Rx_IRQ_Channel    DMA1_Channel4_IRQn
 #define SPI2_MASTER_Tx_IRQ_Channel    DMA1_Channel5_IRQn
+
+#endif // CONFIG_SPI2
 
 /** SPI FLASH **/
 
@@ -293,11 +304,17 @@
 /****************************************************/
 
 /** TICKER **/
-
+// STM32 system timer
+#define CONFIG_STM32_SYSTEM_TIMER   2
 // system timer frequency
 #define SYS_MAIN_TIMER_FREQ   40000
+// system timer counter type
+typedef u16_t system_counter_type;
+
 // system tick frequency
 #define SYS_TIMER_TICK_FREQ   1000
+// os ticker cpu clock div
+#define SYS_OS_TICK_DIV       8
 
 /** COMMUNICATION **/
 
@@ -398,6 +415,14 @@
 
 // disable all debug output
 //#define DBG_OFF
+
+#define VALID_RAM(x) \
+  (((void*)(x) >= RAM_BEGIN && (void*)(x) < RAM_END))
+
+#define VALID_FLASH(x) \
+  ((void*)(x) >= (void*)FLASH_BEGIN && (void*)(x) < (void*)(FLASH_END))
+
+#define VALID_DATA(x) VALID_RAM(x)
 
 #define CONFIG_DEFAULT_DEBUG_MASK     (0xffffffff)
 
