@@ -121,7 +121,7 @@ static void *COMM_UDP_thread_func(void *arg) {
           DBG(D_COMM, D_DEBUG, "COMM UDP rx frame comm stack res:%i fin:%i\n", res, fin);
         }
         // check if tick is needed
-        if (SYS_get_time_ms() - last_tick >= COMM_RESEND_TICK / 2) {
+        if (SYS_get_time_ms() - last_tick >= COMM_RESEND_TICK(0) / 2) {
           last_tick = SYS_get_time_ms();
           //DBG(D_COMM, D_DEBUG, "COMM UDP eth rx tmo, tick\n");
           comm_tick(&ecomm.driver, COMM_cb_get_tick_count());
@@ -191,6 +191,7 @@ void COMM_UDP_init() {
 
   // comm stack setup
   comm_init(&ecomm.driver,        // comm stack struct
+      0,                    // conf
       1,                    // this address
       0,                    // comm_phy_rx_char - called from eth callback
       COMM_UDP_tx_char,         // comm_phy_tx_char

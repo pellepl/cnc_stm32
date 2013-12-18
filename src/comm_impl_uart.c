@@ -28,7 +28,7 @@ typedef struct {
   uart *uart;
 } comm_channel;
 
-static struct {
+static struct ucomm_s {
   // communication stack
   comm driver;
   // communication stack uart port
@@ -208,12 +208,13 @@ void COMM_UART_set_uart(uart* u) {
 
 void COMM_UART_init(uart* u) {
   DBG(D_COMM, D_DEBUG, "COMM init\n");
-  memset(&ucomm, 0, sizeof(comm));
+  memset(&ucomm, 0, sizeof(struct ucomm_s));
 
 
   // comm stack setup
   comm_init(
       &ucomm.driver,        // comm stack struct
+      0,                    // conf
       1,                    // this address
       0,                    // comm_phy_rx_char - called from uart irq
       COMM_UART_tx_char,         // comm_phy_tx_char
@@ -237,7 +238,7 @@ void COMM_UART_init(uart* u) {
 
   // start comm ticker
   ucomm.task = TASK_create(COMM_UART_ticker, TASK_STATIC);
-  TASK_start_timer(ucomm.task, &ucomm.timer, 0, 0, 0, COMM_RESEND_TICK/2, "ucomm_tick");
+  TASK_start_timer(ucomm.task, &ucomm.timer, 0, 0, 0, COMM_RESEND_TICK(0)/2, "ucomm_tick");
 
   {
     const u8_t comm_uart_list[] = COMM_UART_LIST;

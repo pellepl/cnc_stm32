@@ -20,7 +20,7 @@
 /* maximum number of times to resend an unacked pkt before reporting error to user */
 #define COMM_MAX_RESENDS            5
 /* comm_time value to wait before resending an unacked pkt */
-#define COMM_RESEND_TICK            200
+#define COMM_RESEND_TICK(resends)   200
 /* Disable to let everyone listen to everyone, enable to have directed communication */
 #define COMM_USER_DIFFERENTIATION   1
 /* If 1 acks are sent directly after rxing, if 0 acks are sent in tick call */
